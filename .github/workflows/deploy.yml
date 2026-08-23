@@ -1,0 +1,561 @@
+# Publish Advprev CRM to the Hostinger VPS.
+#
+# This workflow runs only when it is started by hand. There is no push trigger,
+# no schedule and no other event, so no commit, tag, release or merge can reach
+# the server as a side effect. Publishing the application is a decision, and
+# this file is the only place that decision is carried out, and the decision
+# itself is exclusively the director's.
+#
+# THE RULE THAT SHAPES THIS FILE, ordered on 2026-08-23: a deploy must never
+# fail because a value was not configured somewhere. Every earlier failure of
+# this esteira was a refusal over something the workflow could have resolved,
+# installed or reused by itself. So this workflow configures what it needs and
+# refuses only when a value cannot exist without a human, and it says exactly
+# which value and exactly how to provide it.
+#
+#   Exactly one secret is irreplaceable: SERVER_SSH_KEY, the private half of the
+#   key pair that opens the office server. Nothing can derive it and nothing can
+#   substitute it, so preflight stops on it before the gate spends a minute.
+#
+#   Everything else resolves through a chain: repository secret, then repository
+#   variable, then the versioned default, evaluated at the point of use with the
+#   or operator, where an unset value is falsy. The chain is deliberately not a
+#   job output: the platform refuses to propagate an output that matches a
+#   secret, measured on run 32618638298, where the deploy job received an empty
+#   host and had nothing to connect to. Preflight therefore reports the source
+#   of each value and carries none of them. The defaults are the
+#   host, the login, the deploy path and the public address, all four already
+#   published inside this same repository in PREAMBLE.md, so writing them here
+#   discloses nothing new and removes four ways for a deploy to break. A secret
+#   or a variable always wins over the default, and the log names the source it
+#   used for each one without ever printing a secret value.
+#
+#   REPO_DEPLOY_KEY is optional. It exists for the day this repository becomes
+#   private. While it is public, the server clones over anonymous HTTPS, which
+#   needs no identity at all. The workflow detects which case it is in and says
+#   so, instead of refusing over a key a public repository does not need.
+#
+#   DOTENV_B64 is optional on a server that already carries its .env. The
+#   configuration of this application lives at ${DEPLOY_PATH}/.env, owned by the
+#   application account with mode 600, outside git like data/ is. When the
+#   secret is present it is written, because the director changed something;
+#   when it is absent and the file is already there, the file is kept and the
+#   log says so with the number of variables it carries. Only when neither
+#   exists does the deploy stop, because no honest build can be produced from
+#   configuration nobody ever provided.
+#
+# The server is prepared, not assumed. Every run makes the host satisfy what
+# this application requires and records what it had to change: the application
+# account, the ownership of the deploy path, git, a Node runtime at or above
+# the engines floor of package.json, pm2, and pm2 resurrection across a reboot.
+# Each of these was a real incident once, and an incident that a workflow can
+# repair by itself must never reach a person again.
+#
+# Everything that touches the checkout, the build or pm2 runs as the account
+# that owns DEPLOY_PATH, never as root, even though the SSH login is root.
+#
+#   This is not a preference. As root the build writes root-owned files into
+#   .next/, after which the application account gets Permission denied on every
+#   later deploy, and the module installs land in root's cache instead of the
+#   account's. pm2 is also per account: a pm2 command run as root talks to
+#   root's daemon, which does not hold the process serving the application, so
+#   a restart would find nothing, the fallback start would collide with the
+#   running process on the loopback port, and the deploy would report success
+#   while the old build stayed live.
+#
+#   The account is derived from DEPLOY_PATH rather than configured as its own
+#   secret, because two names for one value is drift, and this project has paid
+#   for that three times.
+#
+# Health is proved twice, on the loopback interface where the deploy can blame
+# itself, and again from the public address through Cloudflare and nginx, both
+# with retries and a deadline, so a slow edge is waited for and a dead
+# application is still caught.
+
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+
+# One deploy at a time. Two overlapping runs would race on the same checkout and
+# the same pm2 process on the server.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Fails fast, before the gate spends a minute, and only on what no automation
+  # can supply. Everything else is reported with the source it resolved from, so
+  # a surprising deployment target is visible in the log before it happens.
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Require the one secret nothing can replace
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SERVER_SSH_KEY:-}" ]; then
+            echo "SERVER_SSH_KEY is not set on this repository."
+            echo
+            echo "It is the private half of the ed25519 pair that opens the office"
+            echo "server, and it is the only value this workflow cannot resolve,"
+            echo "install or reuse by itself. Set it once with:"
+            echo
+            echo "  gh secret set SERVER_SSH_KEY --repo ${{ github.repository }} < ~/.ssh/advprevcrm_vps_ed25519"
+            echo
+            echo "Nothing was touched on the server."
+            exit 1
+          fi
+          echo "SERVER_SSH_KEY is present."
+
+      # Secret, then variable, then the versioned default, reported here and
+      # applied at the point of use. The defaults are public facts of this
+      # project, already committed in PREAMBLE.md, so the chain removes four
+      # ways to break a deploy without disclosing anything. This step prints
+      # only the source of each value, never the value.
+      - name: Report the deployment target
+        env:
+          HAS_SECRET_HOST: ${{ secrets.VPS_HOSTINGER_SSH_IP != '' }}
+          HAS_VAR_HOST: ${{ vars.VPS_HOSTINGER_SSH_IP != '' }}
+          HAS_SECRET_USER: ${{ secrets.VPS_HOSTINGER_SSH_USER != '' }}
+          HAS_VAR_USER: ${{ vars.VPS_HOSTINGER_SSH_USER != '' }}
+          HAS_SECRET_PATH: ${{ secrets.DEPLOY_PATH != '' }}
+          HAS_VAR_PATH: ${{ vars.DEPLOY_PATH != '' }}
+          HAS_SECRET_URL: ${{ secrets.NEXT_PUBLIC_APP_URL != '' }}
+          HAS_VAR_URL: ${{ vars.NEXT_PUBLIC_APP_URL != '' }}
+        run: |
+          set -euo pipefail
+          source_of() {
+            if [ "$1" = "true" ]; then echo "repository secret"
+            elif [ "$2" = "true" ]; then echo "repository variable"
+            else echo "versioned default in the workflow"
+            fi
+          }
+          echo "VPS_HOSTINGER_SSH_IP: $(source_of "${HAS_SECRET_HOST}" "${HAS_VAR_HOST}")"
+          echo "VPS_HOSTINGER_SSH_USER: $(source_of "${HAS_SECRET_USER}" "${HAS_VAR_USER}")"
+          echo "DEPLOY_PATH: $(source_of "${HAS_SECRET_PATH}" "${HAS_VAR_PATH}")"
+          echo "NEXT_PUBLIC_APP_URL: $(source_of "${HAS_SECRET_URL}" "${HAS_VAR_URL}")"
+
+      # Advisory only, and it never fails the deploy. The two optional secrets
+      # have working fallbacks, and this is where the log says which path the
+      # run will take, so nothing is silent.
+      - name: Report the optional configuration
+        env:
+          HAS_DEPLOY_KEY: ${{ secrets.REPO_DEPLOY_KEY != '' }}
+          HAS_DOTENV: ${{ secrets.DOTENV_B64 != '' }}
+        run: |
+          set -euo pipefail
+          if [ "${HAS_DEPLOY_KEY}" = "true" ]; then
+            echo "REPO_DEPLOY_KEY present: the server will fetch over SSH with it."
+          else
+            echo "REPO_DEPLOY_KEY absent: the server will clone over anonymous HTTPS."
+            echo "That is correct while this repository is public, and the deploy"
+            echo "stops with a named error if the repository is private instead."
+          fi
+          if [ "${HAS_DOTENV}" = "true" ]; then
+            echo "DOTENV_B64 present: the configuration on the server will be replaced."
+          else
+            echo "DOTENV_B64 absent: the .env already on the server will be kept."
+            echo "To replace it, run from the project directory:"
+            echo "  base64 -i .env | gh secret set DOTENV_B64 --repo ${{ github.repository }}"
+          fi
+
+      # Repository metadata is read and reported, never written here: the
+      # workflow token cannot edit repository settings, that permission does not
+      # exist for it. The bootstrap script named below applies them in one
+      # idempotent command from the workstation.
+      - name: Verify the repository presentation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          description="$(gh api "repos/${{ github.repository }}" --jq '.description // ""')"
+          homepage="$(gh api "repos/${{ github.repository }}" --jq '.homepage // ""')"
+          topics="$(gh api "repos/${{ github.repository }}" --jq '.topics | length')"
+
+          incomplete="no"
+          [ -n "${description}" ] && echo "Description is set." || { echo "Description is empty."; incomplete="yes"; }
+          [ -n "${homepage}" ] && echo "Homepage: ${homepage}" || { echo "Homepage is empty."; incomplete="yes"; }
+          [ "${topics}" -gt 0 ] && echo "Topics: ${topics}." || { echo "No topics are set."; incomplete="yes"; }
+
+          if [ "${incomplete}" = "yes" ]; then
+            echo
+            echo "The presentation of this repository is incomplete. The workflow"
+            echo "token cannot write repository settings, that permission does not"
+            echo "exist for it, so apply them in one idempotent command from the"
+            echo "project directory:"
+            echo "  bash scripts/bootstrap-repository.sh"
+          fi
+
+  # The same gate gate.yml runs, invoked rather than copied. Nothing reaches the
+  # server unless it passes: a deploy that ships a build the gate would have
+  # rejected is worse than no deploy.
+  gate:
+    name: Gate
+    needs: preflight
+    uses: ./.github/workflows/gate.yml
+
+  deploy:
+    name: Deploy to VPS
+    needs: [preflight, gate]
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || vars.DEPLOY_PATH || '/home/fjallstoppur/advprevcrm-lpms' }}
+          DOTENV_B64: ${{ secrets.DOTENV_B64 }}
+          REPO_DEPLOY_KEY: ${{ secrets.REPO_DEPLOY_KEY }}
+          REPO_SLUG: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.VPS_HOSTINGER_SSH_IP || vars.VPS_HOSTINGER_SSH_IP || '179.198.112.168' }}
+          username: ${{ secrets.VPS_HOSTINGER_SSH_USER || vars.VPS_HOSTINGER_SSH_USER || 'root' }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 25m
+          envs: DEPLOY_PATH,DOTENV_B64,REPO_DEPLOY_KEY,REPO_SLUG,TARGET_SHA
+          script: |
+            set -euo pipefail
+
+            APP_NAME="advprevcrm-lpms"
+            APP_PORT="3000"
+            # The floor of the engines field in package.json. A runtime below it
+            # fails the build in ways that look like application defects, which
+            # cost one debugging session on 2026-08-22.
+            NODE_FLOOR_MAJOR="22"
+
+            echo "=== Target ==="
+            echo "commit ${TARGET_SHA}"
+            echo "path   ${DEPLOY_PATH}"
+
+            # The account that owns the deployment, derived from the path so
+            # there is no second value to keep in step. Created when absent,
+            # because a missing account is a one-command repair and not a reason
+            # to send a person to a terminal.
+            APP_USER="$(basename "$(dirname "${DEPLOY_PATH}")")"
+            APP_HOME="$(dirname "${DEPLOY_PATH}")"
+            if ! id "${APP_USER}" >/dev/null 2>&1; then
+              echo "Creating the application account ${APP_USER}"
+              useradd --create-home --home-dir "${APP_HOME}" --shell /bin/bash "${APP_USER}"
+            fi
+            echo "Deploying as ${APP_USER}"
+
+            # Ownership before anything else. A single root-owned file left here
+            # by an earlier mistake makes every command below fail with
+            # Permission denied, and the failure names the file, not the cause.
+            mkdir -p "${DEPLOY_PATH}"
+            chown -R "${APP_USER}" "${DEPLOY_PATH}"
+
+            echo "=== Host preparation ==="
+
+            if ! command -v git >/dev/null 2>&1; then
+              echo "Installing git"
+              DEBIAN_FRONTEND=noninteractive apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git
+            fi
+            echo "git $(git --version | awk '{print $3}')"
+
+            # The runtime floor, enforced rather than assumed. NodeSource is the
+            # distribution the Debian image on this host can install from, and
+            # the step is a no-op when the runtime is already current.
+            node_major=0
+            if command -v node >/dev/null 2>&1; then
+              node_major="$(node --version | sed 's/^v//' | cut -d. -f1)"
+            fi
+            if [ "${node_major}" -lt "${NODE_FLOOR_MAJOR}" ]; then
+              echo "Node ${node_major} is below the floor of ${NODE_FLOOR_MAJOR}, installing"
+              curl -fsSL "https://deb.nodesource.com/setup_${NODE_FLOOR_MAJOR}.x" -o /tmp/nodesource_setup.sh
+              bash /tmp/nodesource_setup.sh >/dev/null 2>&1
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs >/dev/null 2>&1
+              rm -f /tmp/nodesource_setup.sh
+            fi
+            echo "node $(node --version), npm $(npm --version)"
+
+            if ! command -v pm2 >/dev/null 2>&1; then
+              echo "Installing pm2"
+              npm install -g pm2 >/dev/null 2>&1
+            fi
+            echo "pm2 $(pm2 --version 2>/dev/null | tail -1)"
+
+            # Resurrection across a reboot, configured idempotently. Without it
+            # a restarted host serves nothing until somebody notices.
+            pm2 startup systemd -u "${APP_USER}" --hp "${APP_HOME}" >/dev/null 2>&1 || true
+
+            echo "=== Source identity ==="
+
+            # A deploy key when one exists, anonymous HTTPS when it does not.
+            # A public repository needs no identity, and refusing over a key it
+            # does not need is the defect this replaced.
+            SSH_DIR="${APP_HOME}/.ssh"
+            KNOWN_HOSTS="${SSH_DIR}/known_hosts"
+            DEPLOY_KEY_FILE="${SSH_DIR}/advprevcrm_deploy_key"
+            mkdir -p "${SSH_DIR}"
+            chmod 700 "${SSH_DIR}"
+            touch "${KNOWN_HOSTS}"
+            chmod 600 "${KNOWN_HOSTS}"
+
+            if command -v ssh-keyscan >/dev/null 2>&1; then
+              if ! grep -q '^github.com ' "${KNOWN_HOSTS}" 2>/dev/null; then
+                ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> "${KNOWN_HOSTS}" 2>/dev/null
+              fi
+              STRICT_HOST_KEY_CHECKING="yes"
+            else
+              STRICT_HOST_KEY_CHECKING="accept-new"
+            fi
+
+            if [ -n "${REPO_DEPLOY_KEY:-}" ]; then
+              umask 077
+              printf '%s\n' "${REPO_DEPLOY_KEY}" > "${DEPLOY_KEY_FILE}"
+              chmod 600 "${DEPLOY_KEY_FILE}"
+              REPO_URL="git@github.com:${REPO_SLUG}.git"
+              USE_KEY="yes"
+              echo "Fetching over SSH with the repository deploy key"
+            else
+              rm -f "${DEPLOY_KEY_FILE}"
+              REPO_URL="https://github.com/${REPO_SLUG}.git"
+              USE_KEY="no"
+              echo "Fetching over anonymous HTTPS, which a public repository allows"
+            fi
+            chown -R "${APP_USER}" "${SSH_DIR}"
+
+            echo "=== Configuration ==="
+
+            # Written when the secret carries a new one, kept when it does not
+            # and the server already has one, refused only when neither exists.
+            # Mode 600 is set before any content is written, so the values are
+            # never briefly world readable.
+            ENV_FILE="${DEPLOY_PATH}/.env"
+            if [ -n "${DOTENV_B64:-}" ]; then
+              umask 077
+              printf '%s' "${DOTENV_B64}" | base64 -d > "${ENV_FILE}"
+              chown "${APP_USER}" "${ENV_FILE}"
+              chmod 600 "${ENV_FILE}"
+              echo "Configuration replaced from DOTENV_B64, $(grep -c '^[A-Z][A-Z0-9_]*=' "${ENV_FILE}") variables."
+            elif [ -s "${ENV_FILE}" ]; then
+              chown "${APP_USER}" "${ENV_FILE}"
+              chmod 600 "${ENV_FILE}"
+              echo "Configuration already on the server was kept, $(grep -c '^[A-Z][A-Z0-9_]*=' "${ENV_FILE}") variables."
+            else
+              echo "There is no configuration for this application, neither the"
+              echo "DOTENV_B64 secret nor a .env on the server, and a build without"
+              echo "it would start, answer requests and be wrong about everything."
+              echo "Provide it once, from the project directory:"
+              echo "  base64 -i .env | gh secret set DOTENV_B64 --repo ${REPO_SLUG}"
+              exit 1
+            fi
+
+            echo "=== Application stage ==="
+
+            # Everything from here runs as the application account. The stage is
+            # fed on stdin with a quoted heredoc so root's shell expands nothing
+            # inside it, and the values it needs arrive as positional arguments.
+            sudo -u "${APP_USER}" -H bash -ls -- \
+              "${DEPLOY_PATH}" "${APP_NAME}" "${APP_PORT}" "${REPO_URL}" \
+              "${DEPLOY_KEY_FILE}" "${KNOWN_HOSTS}" "${STRICT_HOST_KEY_CHECKING}" \
+              "${USE_KEY}" "${TARGET_SHA}" <<'APPLICATION_STAGE'
+            set -euo pipefail
+
+            DEPLOY_PATH="$1"
+            APP_NAME="$2"
+            APP_PORT="$3"
+            REPO_URL="$4"
+            DEPLOY_KEY_FILE="$5"
+            KNOWN_HOSTS="$6"
+            STRICT_HOST_KEY_CHECKING="$7"
+            USE_KEY="$8"
+            TARGET_SHA="$9"
+
+            # PATH, made explicit instead of inherited. sudo resets the
+            # environment, and a shell started this way does not read the
+            # account's rc files, so a version manager configured there is
+            # invisible even in a login shell. This deploy died once on
+            # "git: command not found" for exactly that reason.
+            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+            if [ -d "${HOME}/.nvm/versions/node" ]; then
+              newest_node="$(ls -1 "${HOME}/.nvm/versions/node" 2>/dev/null | sort -V | tail -1)"
+              if [ -n "${newest_node}" ]; then
+                export PATH="${HOME}/.nvm/versions/node/${newest_node}/bin:${PATH}"
+              fi
+            fi
+            for candidate in "${HOME}/.local/bin" "${HOME}/bin"; do
+              if [ -d "${candidate}" ]; then
+                export PATH="${candidate}:${PATH}"
+              fi
+            done
+
+            if [ "${USE_KEY}" = "yes" ]; then
+              export GIT_SSH_COMMAND="ssh -i ${DEPLOY_KEY_FILE} -o IdentitiesOnly=yes -o UserKnownHostsFile=${KNOWN_HOSTS} -o StrictHostKeyChecking=${STRICT_HOST_KEY_CHECKING}"
+            fi
+            # Never wait on a credential prompt: an unreachable private
+            # repository must fail in seconds with a readable message instead of
+            # hanging until the command timeout.
+            export GIT_TERMINAL_PROMPT=0
+            export GIT_ASKPASS=/bin/true
+
+            missing=""
+            for tool in git node npm pm2; do
+              command -v "${tool}" >/dev/null 2>&1 || missing="${missing} ${tool}"
+            done
+            if [ -n "${missing}" ]; then
+              echo "Not on PATH for $(id -un):${missing}"
+              echo "PATH=${PATH}"
+              exit 1
+            fi
+
+            cd "${DEPLOY_PATH}"
+            echo "Running as $(id -un) in $(pwd)"
+            echo "git $(git --version | awk '{print $3}'), node $(node --version), npm $(npm --version), pm2 $(pm2 --version 2>/dev/null | tail -1)"
+
+            # The directory may be empty, which it is on a first deploy, so the
+            # repository is initialised rather than assumed.
+            if [ ! -d ".git" ]; then
+              git init -q
+              git remote add origin "${REPO_URL}"
+            elif [ "$(git remote get-url origin)" != "${REPO_URL}" ]; then
+              git remote set-url origin "${REPO_URL}"
+            fi
+
+            echo "Fetching ${TARGET_SHA}"
+            if ! git fetch --depth 1 origin main 2>/tmp/fetch.err; then
+              echo "The server could not fetch this repository:"
+              sed 's/^/  /' /tmp/fetch.err
+              if [ "${USE_KEY}" = "no" ]; then
+                echo "The fetch was anonymous because REPO_DEPLOY_KEY is not set."
+                echo "If this repository is private, set that secret to the private"
+                echo "half of a read-only deploy key registered on it."
+              fi
+              exit 1
+            fi
+            git reset --hard FETCH_HEAD
+            # Leftovers from an earlier deploy go, except the module cache and
+            # the build cache, which are what make this fast. data/ is gitignored
+            # and holds the office records on the server, so git clean without -x
+            # leaves it alone, which is exactly the point.
+            git clean -fdq -e node_modules -e .next
+            echo "Checkout at $(git rev-parse --short HEAD)"
+
+            echo "Installing dependencies"
+            npm ci --no-audit --no-fund
+
+            echo "Building"
+            npx next build
+
+            # Take over the process and the port before starting. A host
+            # deployed by hand before this workflow existed carries a pm2 entry
+            # under whatever name that deployment chose, and this file cannot
+            # know it. Two entries would race for the loopback port: the loser
+            # sits errored while nginx keeps proxying to the winner, so the
+            # deploy would report success while the old build stayed live.
+            holder=""
+            if command -v ss >/dev/null 2>&1; then
+              holder="$(ss -lptn 2>/dev/null | grep ":${APP_PORT} " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2 || true)"
+            fi
+            pm2 jlist 2>/dev/null | node -e '
+              let raw = ""
+              process.stdin.on("data", (chunk) => { raw += chunk })
+              process.stdin.on("end", () => {
+                const [cwd, holder, keep] = process.argv.slice(1)
+                let list = []
+                try { list = JSON.parse(raw) } catch { list = [] }
+                const names = new Set()
+                for (const entry of list) {
+                  if (!entry || !entry.name || entry.name === keep) continue
+                  if (entry.pm2_env && entry.pm2_env.pm_cwd === cwd) names.add(entry.name)
+                  if (holder && String(entry.pid) === holder) names.add(entry.name)
+                }
+                for (const name of names) console.log(name)
+              })
+            ' "${DEPLOY_PATH}" "${holder}" "${APP_NAME}" | while read -r stale; do
+              [ -z "${stale}" ] && continue
+              echo "Removing pm2 process ${stale}: it serves this path or holds port ${APP_PORT}"
+              pm2 delete "${stale}" >/dev/null 2>&1 || true
+            done
+
+            echo "Starting ${APP_NAME}"
+            # --update-env, because without it pm2 reuses the environment it was
+            # started with and a rotated key would deploy and be ignored. pm2 is
+            # pointed at the Next binary rather than the shell wrapper, which
+            # crashes under node, and the bind is explicit so the application is
+            # reachable only through nginx.
+            pm2 restart "${APP_NAME}" --update-env \
+              || pm2 start node_modules/next/dist/bin/next --name "${APP_NAME}" -- start -H 127.0.0.1 -p "${APP_PORT}"
+            pm2 save >/dev/null
+
+            # The port has to be answered by what this deploy just started.
+            # Without this, the public health check could read a status from a
+            # process that was never replaced, and a deploy that shipped nothing
+            # would pass. The panel answers 200 without a session by design in
+            # this phase, because no authentication module exists yet.
+            echo "Waiting for the application on 127.0.0.1:${APP_PORT}"
+            deadline=$(( $(date +%s) + 120 ))
+            code="000"
+            while [ "$(date +%s)" -lt "${deadline}" ]; do
+              code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/" 2>/dev/null || true)"
+              code="${code:-000}"
+              [ "${code}" = "200" ] && break
+              sleep 3
+            done
+            if [ "${code}" != "200" ]; then
+              echo "The application is not serving on the loopback port, last status ${code}."
+              pm2 list || true
+              pm2 logs "${APP_NAME}" --lines 60 --nostream || true
+              exit 1
+            fi
+            echo "Loopback answered 200"
+
+            # Advisory report of the configuration, by name only and never by
+            # value: which documented variables of .env.example are absent from
+            # what this server carries. An integration that is unconfigured says
+            # so at runtime, so this is a warning and never a failure.
+            if [ -f ".env.example" ] && [ -f ".env" ]; then
+              absent=0
+              for name in $(grep -oE '^[A-Z][A-Z0-9_]*=' .env.example | tr -d '='); do
+                if ! grep -q "^${name}=" ".env"; then
+                  absent=$(( absent + 1 ))
+                fi
+              done
+              total=$(grep -cE '^[A-Z][A-Z0-9_]*=' .env.example)
+              echo "Configuration coverage: ${absent} of ${total} documented variables are absent from the deployed .env."
+            fi
+
+            echo "Deployment finished"
+            APPLICATION_STAGE
+
+      # The public address, through Cloudflare and nginx, with retries because
+      # an edge can lag a restart by seconds. The deploy already proved the
+      # loopback, so a failure here is the proxy or the edge, not the build.
+      - name: Health check
+        env:
+          SITE_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || vars.NEXT_PUBLIC_APP_URL || 'https://advprevcrm.tech' }}
+        run: |
+          set -euo pipefail
+
+          probe() {
+            local path="$1" deadline code
+            deadline=$(( $(date +%s) + 120 ))
+            code="000"
+            while [ "$(date +%s)" -lt "${deadline}" ]; do
+              code="$(curl -s -o /dev/null -w '%{http_code}' "${SITE_URL}${path}" 2>/dev/null || true)"
+              code="${code:-000}"
+              [ "${code}" = "200" ] && break
+              sleep 6
+            done
+            echo "GET ${path} -> ${code}"
+            [ "${code}" = "200" ]
+          }
+
+          # The panel at the root, and one pt-BR URL, because the whole product
+          # speaks Brazilian Portuguese through rewrites and a deploy that lost
+          # next.config.ts would serve the root and break every screen the
+          # lawyers actually open.
+          probe "/"
+          probe "/tarefas"
+          echo "Health check passed"

@@ -1,0 +1,80 @@
+# Judicial calendar of the office: the days on which a procedural deadline does
+# not run. Nothing here is written in code, because a legal value that changes
+# over time is a record with a source and a date, never a literal.
+#
+# What is law is transcribed from the official text at planalto.gov.br, verified
+# on 2026-08-12, and each entry names its source.
+#
+# What is NOT law, and has no unified public source in Brazil, is the calendar of
+# each court: local holidays, movable suspensions such as Carnival and Corpus
+# Christi, and days without forensic expedient. Article 216 of the Code of Civil
+# Procedure makes those days feriados for forensic purposes, so they change a
+# deadline, and the office fills them per court, with the source and the author
+# of every adjustment recorded. A court with no reviewed calendar is marked as
+# such and every calculation that touches it carries the warning on screen.
+
+version: 1
+capturedAt: 2026-08-12
+sources:
+  - "Lei 662 de 1949, com a redação da Lei 10.607 de 2002, https://www.planalto.gov.br/ccivil_03/leis/l0662.htm"
+  - "Lei 6.802 de 1980, https://www.planalto.gov.br/ccivil_03/leis/l6802.htm"
+  - "Lei 14.759 de 2023, https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2023/lei/L14759.htm"
+  - "Código de Processo Civil, Lei 13.105 de 2015, artigos 216, 219, 220 e 224, https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2015/lei/l13105.htm"
+  - "Consolidação das Leis do Trabalho, artigos 775 e 775-A, https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm"
+  - "Lei 11.419 de 2006, artigo 4º, parágrafos 3º e 4º, https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11419.htm"
+
+# Feriados nacionais declarados em lei federal. Dia e mês fixos, todo ano.
+nationalHolidays:
+  - day: "01-01"
+    name: "Confraternização Universal"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+  - day: "04-21"
+    name: "Tiradentes"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+  - day: "05-01"
+    name: "Dia do Trabalho"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+  - day: "09-07"
+    name: "Independência do Brasil"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+  - day: "10-12"
+    name: "Nossa Senhora Aparecida"
+    source: "Lei 6.802 de 1980, artigo 1º"
+  - day: "11-02"
+    name: "Finados"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+  - day: "11-15"
+    name: "Proclamação da República"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+  - day: "11-20"
+    name: "Dia Nacional de Zumbi e da Consciência Negra"
+    source: "Lei 14.759 de 2023, artigo 1º"
+  - day: "12-25"
+    name: "Natal"
+    source: "Lei 662 de 1949, artigo 1º, redação da Lei 10.607 de 2002"
+
+# Suspensão de fim de ano. O prazo processual não corre nesses dias.
+yearEndRecess:
+  start: "12-20"
+  end: "01-20"
+  sources:
+    - "Código de Processo Civil, artigo 220"
+    - "Consolidação das Leis do Trabalho, artigo 775-A, incluído pela Lei 13.545 de 2017"
+  review: "A aplicação da suspensão aos Juizados Especiais é controvertida e não está pacificada em lei. O escritório confirma o entendimento por tribunal antes de confiar em um vencimento calculado que atravesse esse período."
+
+# Calendário por tribunal. Enquanto reviewed for false, o sistema calcula e diz
+# na tela que o calendário daquele tribunal ainda não foi revisado pelo
+# escritório. Cada ajuste carrega data, motivo, fonte, autor e momento.
+courts:
+  - sigla: TRF3
+    name: "Tribunal Regional Federal da 3ª Região"
+    reviewed: false
+    adjustments: []
+  - sigla: TJSP
+    name: "Tribunal de Justiça de São Paulo"
+    reviewed: false
+    adjustments: []
+  - sigla: TRT15
+    name: "Tribunal Regional do Trabalho da 15ª Região"
+    reviewed: false
+    adjustments: []

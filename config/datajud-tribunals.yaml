@@ -1,0 +1,382 @@
+# DataJud tribunal endpoints, transcribed from the official page
+# https://datajud-wiki.cnj.jus.br/api-publica/endpoints
+# Captured on 2026-08-12. The alias is the path segment of the endpoint:
+# <DATAJUD_BASE_URL>/<alias>/_search. Never hardcode an alias in code; read it
+# from here. When the CNJ publishes a change, this file is what gets updated,
+# with the capture date above.
+source: https://datajud-wiki.cnj.jus.br/api-publica/endpoints
+capturedAt: 2026-08-12
+groups:
+  superior: "Tribunais superiores"
+  federal: "Justiça Federal, Tribunais Regionais Federais"
+  estadual: "Justiça Estadual, Tribunais de Justiça"
+  trabalho: "Justiça do Trabalho, Tribunais Regionais do Trabalho"
+  eleitoral: "Justiça Eleitoral, Tribunais Regionais Eleitorais"
+  militar-estadual: "Justiça Militar Estadual"
+tribunals:
+  - alias: api_publica_tst
+    sigla: TST
+    name: "Tribunal Superior do Trabalho"
+    kind: superior
+  - alias: api_publica_tse
+    sigla: TSE
+    name: "Tribunal Superior Eleitoral"
+    kind: superior
+  - alias: api_publica_stj
+    sigla: STJ
+    name: "Tribunal Superior de Justiça"
+    kind: superior
+    note: "A página oficial publica o nome como Tribunal Superior de Justiça; a denominação constitucional é Superior Tribunal de Justiça."
+  - alias: api_publica_stm
+    sigla: STM
+    name: "Tribunal Superior Militar"
+    kind: superior
+  - alias: api_publica_trf1
+    sigla: TRF1
+    name: "Tribunal Regional Federal da 1ª Região"
+    kind: federal
+  - alias: api_publica_trf2
+    sigla: TRF2
+    name: "Tribunal Regional Federal da 2ª Região"
+    kind: federal
+  - alias: api_publica_trf3
+    sigla: TRF3
+    name: "Tribunal Regional Federal da 3ª Região"
+    kind: federal
+  - alias: api_publica_trf4
+    sigla: TRF4
+    name: "Tribunal Regional Federal da 4ª Região"
+    kind: federal
+  - alias: api_publica_trf5
+    sigla: TRF5
+    name: "Tribunal Regional Federal da 5ª Região"
+    kind: federal
+  - alias: api_publica_trf6
+    sigla: TRF6
+    name: "Tribunal Regional Federal da 6ª Região"
+    kind: federal
+  - alias: api_publica_tjac
+    sigla: TJAC
+    name: "Tribunal de Justiça do Acre"
+    kind: estadual
+  - alias: api_publica_tjal
+    sigla: TJAL
+    name: "Tribunal de Justiça de Alagoas"
+    kind: estadual
+  - alias: api_publica_tjam
+    sigla: TJAM
+    name: "Tribunal de Justiça do Amazonas"
+    kind: estadual
+  - alias: api_publica_tjap
+    sigla: TJAP
+    name: "Tribunal de Justiça do Amapá"
+    kind: estadual
+  - alias: api_publica_tjba
+    sigla: TJBA
+    name: "Tribunal de Justiça da Bahia"
+    kind: estadual
+  - alias: api_publica_tjce
+    sigla: TJCE
+    name: "Tribunal de Justiça do Ceará"
+    kind: estadual
+  - alias: api_publica_tjdft
+    sigla: TJDFT
+    name: "TJ do Distrito Federal e Territórios"
+    kind: estadual
+  - alias: api_publica_tjes
+    sigla: TJES
+    name: "Tribunal de Justiça do Espírito Santo"
+    kind: estadual
+  - alias: api_publica_tjgo
+    sigla: TJGO
+    name: "Tribunal de Justiça do Goiás"
+    kind: estadual
+  - alias: api_publica_tjma
+    sigla: TJMA
+    name: "Tribunal de Justiça do Maranhão"
+    kind: estadual
+  - alias: api_publica_tjmg
+    sigla: TJMG
+    name: "Tribunal de Justiça de Minas Gerais"
+    kind: estadual
+  - alias: api_publica_tjms
+    sigla: TJMS
+    name: "TJ do Mato Grosso de Sul"
+    kind: estadual
+  - alias: api_publica_tjmt
+    sigla: TJMT
+    name: "Tribunal de Justiça do Mato Grosso"
+    kind: estadual
+  - alias: api_publica_tjpa
+    sigla: TJPA
+    name: "Tribunal de Justiça do Pará"
+    kind: estadual
+  - alias: api_publica_tjpb
+    sigla: TJPB
+    name: "Tribunal de Justiça da Paraíba"
+    kind: estadual
+  - alias: api_publica_tjpe
+    sigla: TJPE
+    name: "Tribunal de Justiça de Pernambuco"
+    kind: estadual
+  - alias: api_publica_tjpi
+    sigla: TJPI
+    name: "Tribunal de Justiça do Piauí"
+    kind: estadual
+  - alias: api_publica_tjpr
+    sigla: TJPR
+    name: "Tribunal de Justiça do Paraná"
+    kind: estadual
+  - alias: api_publica_tjrj
+    sigla: TJRJ
+    name: "Tribunal de Justiça do Rio de Janeiro"
+    kind: estadual
+  - alias: api_publica_tjrn
+    sigla: TJRN
+    name: "TJ do Rio Grande do Norte"
+    kind: estadual
+  - alias: api_publica_tjro
+    sigla: TJRO
+    name: "Tribunal de Justiça de Rondônia"
+    kind: estadual
+  - alias: api_publica_tjrr
+    sigla: TJRR
+    name: "Tribunal de Justiça de Roraima"
+    kind: estadual
+  - alias: api_publica_tjrs
+    sigla: TJRS
+    name: "Tribunal de Justiça do Rio Grande do Sul"
+    kind: estadual
+  - alias: api_publica_tjsc
+    sigla: TJSC
+    name: "Tribunal de Justiça de Santa Catarina"
+    kind: estadual
+  - alias: api_publica_tjse
+    sigla: TJSE
+    name: "Tribunal de Justiça de Sergipe"
+    kind: estadual
+  - alias: api_publica_tjsp
+    sigla: TJSP
+    name: "Tribunal de Justiça de São Paulo"
+    kind: estadual
+  - alias: api_publica_tjto
+    sigla: TJTO
+    name: "Tribunal de Justiça do Tocantins"
+    kind: estadual
+  - alias: api_publica_trt1
+    sigla: TRT1
+    name: "Tribunal Regional do Trabalho da 1ª Região"
+    kind: trabalho
+  - alias: api_publica_trt2
+    sigla: TRT2
+    name: "Tribunal Regional do Trabalho da 2ª Região"
+    kind: trabalho
+  - alias: api_publica_trt3
+    sigla: TRT3
+    name: "Tribunal Regional do Trabalho da 3ª Região"
+    kind: trabalho
+  - alias: api_publica_trt4
+    sigla: TRT4
+    name: "Tribunal Regional do Trabalho da 4ª Região"
+    kind: trabalho
+  - alias: api_publica_trt5
+    sigla: TRT5
+    name: "Tribunal Regional do Trabalho da 5ª Região"
+    kind: trabalho
+  - alias: api_publica_trt6
+    sigla: TRT6
+    name: "Tribunal Regional do Trabalho da 6ª Região"
+    kind: trabalho
+  - alias: api_publica_trt7
+    sigla: TRT7
+    name: "Tribunal Regional do Trabalho da 7ª Região"
+    kind: trabalho
+  - alias: api_publica_trt8
+    sigla: TRT8
+    name: "Tribunal Regional do Trabalho da 8ª Região"
+    kind: trabalho
+  - alias: api_publica_trt9
+    sigla: TRT9
+    name: "Tribunal Regional do Trabalho da 9ª Região"
+    kind: trabalho
+  - alias: api_publica_trt10
+    sigla: TRT10
+    name: "Tribunal Regional do Trabalho da 10ª Região"
+    kind: trabalho
+  - alias: api_publica_trt11
+    sigla: TRT11
+    name: "Tribunal Regional do Trabalho da 11ª Região"
+    kind: trabalho
+  - alias: api_publica_trt12
+    sigla: TRT12
+    name: "Tribunal Regional do Trabalho da 12ª Região"
+    kind: trabalho
+  - alias: api_publica_trt13
+    sigla: TRT13
+    name: "Tribunal Regional do Trabalho da 13ª Região"
+    kind: trabalho
+  - alias: api_publica_trt14
+    sigla: TRT14
+    name: "Tribunal Regional do Trabalho da 14ª Região"
+    kind: trabalho
+  - alias: api_publica_trt15
+    sigla: TRT15
+    name: "Tribunal Regional do Trabalho da 15ª Região"
+    kind: trabalho
+  - alias: api_publica_trt16
+    sigla: TRT16
+    name: "Tribunal Regional do Trabalho da 16ª Região"
+    kind: trabalho
+  - alias: api_publica_trt17
+    sigla: TRT17
+    name: "Tribunal Regional do Trabalho da 17ª Região"
+    kind: trabalho
+  - alias: api_publica_trt18
+    sigla: TRT18
+    name: "Tribunal Regional do Trabalho da 18ª Região"
+    kind: trabalho
+  - alias: api_publica_trt19
+    sigla: TRT19
+    name: "Tribunal Regional do Trabalho da 19ª Região"
+    kind: trabalho
+  - alias: api_publica_trt20
+    sigla: TRT20
+    name: "Tribunal Regional do Trabalho da 20ª Região"
+    kind: trabalho
+  - alias: api_publica_trt21
+    sigla: TRT21
+    name: "Tribunal Regional do Trabalho da 21ª Região"
+    kind: trabalho
+  - alias: api_publica_trt22
+    sigla: TRT22
+    name: "Tribunal Regional do Trabalho da 22ª Região"
+    kind: trabalho
+  - alias: api_publica_trt23
+    sigla: TRT23
+    name: "Tribunal Regional do Trabalho da 23ª Região"
+    kind: trabalho
+  - alias: api_publica_trt24
+    sigla: TRT24
+    name: "Tribunal Regional do Trabalho da 24ª Região"
+    kind: trabalho
+  - alias: api_publica_tre-ac
+    sigla: TRE-AC
+    name: "Tribunal Regional Eleitoral do Acre"
+    kind: eleitoral
+  - alias: api_publica_tre-al
+    sigla: TRE-AL
+    name: "Tribunal Regional Eleitoral de Alagoas"
+    kind: eleitoral
+  - alias: api_publica_tre-am
+    sigla: TRE-AM
+    name: "Tribunal Regional Eleitoral do Amazonas"
+    kind: eleitoral
+  - alias: api_publica_tre-ap
+    sigla: TRE-AP
+    name: "Tribunal Regional Eleitoral do Amapá"
+    kind: eleitoral
+  - alias: api_publica_tre-ba
+    sigla: TRE-BA
+    name: "Tribunal de Justiça da Bahia"
+    kind: eleitoral
+    note: "A página oficial publica o nome como Tribunal de Justiça da Bahia na tabela dos Tribunais Regionais Eleitorais; pelo alias e pela tabela, é o Tribunal Regional Eleitoral da Bahia."
+  - alias: api_publica_tre-ce
+    sigla: TRE-CE
+    name: "Tribunal Regional Eleitoral do Ceará"
+    kind: eleitoral
+  - alias: api_publica_tre-dft
+    sigla: TRE-DFT
+    name: "Tribunal Regional Eleitoral do Distrito Federal"
+    kind: eleitoral
+  - alias: api_publica_tre-es
+    sigla: TRE-ES
+    name: "Tribunal Regional Eleitoral do Espírito Santo"
+    kind: eleitoral
+  - alias: api_publica_tre-go
+    sigla: TRE-GO
+    name: "Tribunal Regional Eleitoral do Goiás"
+    kind: eleitoral
+  - alias: api_publica_tre-ma
+    sigla: TRE-MA
+    name: "Tribunal Regional Eleitoral do Maranhão"
+    kind: eleitoral
+  - alias: api_publica_tre-mg
+    sigla: TRE-MG
+    name: "Tribunal Regional Eleitoral de Minas Gerais"
+    kind: eleitoral
+  - alias: api_publica_tre-ms
+    sigla: TRE-MS
+    name: "Tribunal Regional Eleitoral do Mato Grosso de Sul"
+    kind: eleitoral
+  - alias: api_publica_tre-mt
+    sigla: TRE-MT
+    name: "Tribunal Regional Eleitoral do Mato Grosso"
+    kind: eleitoral
+  - alias: api_publica_tre-pa
+    sigla: TRE-PA
+    name: "Tribunal Regional Eleitoral do Pará"
+    kind: eleitoral
+  - alias: api_publica_tre-pb
+    sigla: TRE-PB
+    name: "Tribunal Regional Eleitoral da Paraíba"
+    kind: eleitoral
+  - alias: api_publica_tre-pe
+    sigla: TRE-PE
+    name: "Tribunal Regional Eleitoral de Pernambuco"
+    kind: eleitoral
+  - alias: api_publica_tre-pi
+    sigla: TRE-PI
+    name: "Tribunal Regional Eleitoral do Piauí"
+    kind: eleitoral
+  - alias: api_publica_tre-pr
+    sigla: TRE-PR
+    name: "Tribunal Regional Eleitoral do Paraná"
+    kind: eleitoral
+  - alias: api_publica_tre-rj
+    sigla: TRE-RJ
+    name: "Tribunal Regional Eleitoral do Rio de Janeiro"
+    kind: eleitoral
+  - alias: api_publica_tre-rn
+    sigla: TRE-RN
+    name: "Tribunal Regional Eleitoral do Rio Grande do Norte"
+    kind: eleitoral
+  - alias: api_publica_tre-ro
+    sigla: TRE-RO
+    name: "Tribunal Regional Eleitoral de Rondônia"
+    kind: eleitoral
+  - alias: api_publica_tre-rr
+    sigla: TRE-RR
+    name: "Tribunal Regional Eleitoral de Roraima"
+    kind: eleitoral
+  - alias: api_publica_tre-rs
+    sigla: TRE-RS
+    name: "Tribunal Regional Eleitoral do Rio Grande do Sul"
+    kind: eleitoral
+  - alias: api_publica_tre-sc
+    sigla: TRE-SC
+    name: "Tribunal Regional Eleitoral de Santa Catarina"
+    kind: eleitoral
+  - alias: api_publica_tre-se
+    sigla: TRE-SE
+    name: "Tribunal Regional Eleitoral de Sergipe"
+    kind: eleitoral
+  - alias: api_publica_tre-sp
+    sigla: TRE-SP
+    name: "Tribunal Regional Eleitoral de São Paulo"
+    kind: eleitoral
+  - alias: api_publica_tre-to
+    sigla: TRE-TO
+    name: "Tribunal Regional Eleitoral do Tocantins"
+    kind: eleitoral
+  - alias: api_publica_tjmmg
+    sigla: TJMMG
+    name: "Tribunal Justiça Militar de Minas Gerais"
+    kind: militar-estadual
+  - alias: api_publica_tjmrs
+    sigla: TJMRS
+    name: "Tribunal Justiça Militar do Rio Grande do Sul"
+    kind: militar-estadual
+  - alias: api_publica_tjmsp
+    sigla: TJMSP
+    name: "Tribunal Justiça Militar de São Paulo"
+    kind: militar-estadual

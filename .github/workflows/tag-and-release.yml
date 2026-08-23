@@ -1,0 +1,143 @@
+# Tag and release whatever version package.json declares.
+#
+# The version is not computed here and never bumped here. This project pins
+# itself at 1.0.0-canary and only the owner decides when it moves, so this
+# workflow reads the declared version and does exactly one thing with it: if no
+# tag exists for it, it creates the tag and publishes the release. If the tag
+# exists, it stops and says so.
+#
+# That makes it idempotent, which matters because it runs after every push to
+# main. A workflow that tried to be clever about versions here would either
+# invent a number the owner did not choose or fail loudly on every commit.
+#
+# It waits for the gate. The trigger is workflow_run on Gate, and the job refuses
+# to run unless that gate concluded successfully on main. This is not decoration:
+# before the dependency existed in the sibling project, the two workflows started
+# at the same second and the release finished 33 seconds before the gate did, so
+# a commit whose gate had already failed received a public release. A release is
+# a claim that a commit is good, and a claim made before the check completes is
+# not a claim.
+#
+# Release notes come from the CHANGELOG section for that version. The CHANGELOG is
+# written by hand with UTC timestamps, so it is the accurate record; generating
+# notes from commit subjects instead would publish a worse version of something
+# that already exists.
+
+name: Tag and Release
+
+on:
+  # Fires when the gate finishes, whatever its result. The job below is what
+  # decides, because a trigger cannot filter on conclusion.
+  workflow_run:
+    workflows: [Gate]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # The commit this run is about. On a workflow_run event that is the head of the
+  # run that triggered this one, because github.sha would be the tip of the
+  # default branch and the two are not always the same commit. On a manual
+  # dispatch there is no triggering run, so github.sha is the dispatched ref.
+  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+permissions:
+  # The only write this needs. Creating a tag and a release is a contents write;
+  # nothing here touches issues, packages or actions.
+  contents: write
+
+jobs:
+  release:
+    name: Tag and release
+    runs-on: ubuntu-latest
+    # Nothing is published unless the gate passed on main. A manual dispatch is
+    # allowed through because a person asking for it has already decided.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          # The commit the gate approved, not the branch tip. On a workflow_run
+          # event the default checkout would take the tip, which may already be a
+          # later, ungated commit.
+          ref: ${{ env.TARGET_SHA }}
+          # Full history, because the tag is created against this commit and a
+          # shallow clone cannot see whether the tag already exists.
+          fetch-depth: 0
+
+      - name: Read declared version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Declared version: ${version}"
+
+      - name: Check whether the tag already exists
+        id: existing
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.version.outputs.tag }} already exists, nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.version.outputs.tag }} does not exist yet."
+          fi
+
+      - name: Extract the changelog section for this version
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          # The section runs from its own heading to the next one. Unreleased is
+          # never published: a release describes what shipped, not what is pending.
+          awk -v v="## [${version}]" '
+            index($0, v) == 1 { capture = 1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.md
+
+          if [ -z "$(tr -d '[:space:]' < release-notes.md)" ]; then
+            echo "See CHANGELOG.md for the full record of this version." > release-notes.md
+          fi
+
+          # The notes travel as a file, never through the environment, and are
+          # truncated with an honest pointer when they exceed the release body
+          # cap. Both limits were measured on the first release of this
+          # repository, whose section is the whole changelog at 140,117
+          # characters: the runner refused to start a process carrying it in
+          # the environment with "Argument list too long", and the GitHub
+          # release body caps at 125,000 characters.
+          if [ "$(wc -c < release-notes.md)" -gt 120000 ]; then
+            head -c 120000 release-notes.md > release-notes.trimmed
+            printf '\n\n[Truncated. The full record of this version lives in CHANGELOG.md.]\n' >> release-notes.trimmed
+            mv release-notes.trimmed release-notes.md
+          fi
+          echo "Prepared release notes, $(wc -c < release-notes.md) characters."
+
+      # The tag is created by the release API rather than by git, which is why no
+      # git identity is configured here and no identity secret exists. A tag is
+      # not a commit: nothing is authored, so there is no committer to name, and
+      # storing a name and an address as repository secrets would have filed
+      # public project facts in the place reserved for things that must stay
+      # hidden.
+      - name: Create the tag and the release
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "${TAG}" \
+            --target "${TARGET_SHA}" \
+            --title "Advprev CRM ${TAG}" \
+            --notes-file release-notes.md
+          echo "Released ${TAG} at ${TARGET_SHA}"

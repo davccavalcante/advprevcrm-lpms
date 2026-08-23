@@ -1,0 +1,140 @@
+{
+  "name": "advprevcrm-lpms",
+  "description": "Advprev CRM, the legal practice management system (LPMS) of a Brazilian social security law firm, built on Massive Intelligence (IM) with the MAIC, HIM, and NHE architecture.",
+  "version": "1.0.0-canary",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "David C Cavalcante",
+    "email": "davcavalcante@proton.me",
+    "organization": "Takk Innovate Studio",
+    "url": "https://linkedin.com/in/hellodav"
+  },
+  "contributors": [
+    {
+      "name": "Takk Innovate Studio",
+      "email": "say@takk.ag",
+      "url": "https://takk.ag"
+    },
+    {
+      "name": "Fjallstoppur",
+      "email": "fjallstoppur@proton.me",
+      "url": "https://github.com/fjallstoppur"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davccavalcante/advprevcrm-lpms.git"
+  },
+  "bugs": {
+    "url": "https://github.com/davccavalcante/advprevcrm-lpms/issues"
+  },
+  "homepage": "https://github.com/davccavalcante/advprevcrm-lpms#readme",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/davccavalcante"
+  },
+  "keywords": [
+    "davccavalcante",
+    "davidccavalcante",
+    "davcavalcante",
+    "fjallstoppur",
+    "takk-innovate-studio",
+    "takk8-ag",
+    "takk8is",
+    "advprev",
+    "advprevcrm",
+    "advprevcrm-lpms",
+    "advprevcrm-tech",
+    "legal-practice-management"
+  ],
+  "engines": {
+    "node": ">=22.13",
+    "npm": ">=10.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gate": "biome check . && next typegen && tsc --noEmit && vitest run && next build"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@sentry/nextjs": "^10.70.0",
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.3",
+    "@takk/agenticstash": "^1.0.0",
+    "@takk/alkaline": "^1.0.0",
+    "@takk/automend": "^1.0.0",
+    "@takk/bayesbelief": "^1.0.0",
+    "@takk/bayescausal": "^1.0.0",
+    "@takk/bayeschangepoint": "^1.0.0",
+    "@takk/bayesconsensus": "^1.0.0",
+    "@takk/bayesdecide": "^1.0.0",
+    "@takk/bayesoutputgate": "^1.0.0",
+    "@takk/bayespredicts": "^1.0.0",
+    "@takk/bayesretry": "^1.0.0",
+    "@takk/bayesroute": "^1.0.0",
+    "@takk/bayestruth": "^1.0.0",
+    "@takk/behavioralai": "^1.0.0",
+    "@takk/caduceus": "^1.0.0",
+    "@takk/coryphaeus": "^1.0.0",
+    "@takk/gaptime": "^1.0.0",
+    "@takk/glasshouse": "^1.0.0",
+    "@takk/keymesh": "^1.0.0",
+    "@takk/krikos": "^1.0.0",
+    "@takk/mcpcustoms": "^1.0.0",
+    "@takk/mnemosyne": "^1.0.0",
+    "@takk/modelchain": "^1.0.0",
+    "@takk/noeticos": "^1.0.0",
+    "@takk/racs": "^1.0.0",
+    "@takk/tokenforecast": "^1.0.0",
+    "@takk/treasury": "^1.0.0",
+    "@takk/tribunal": "^1.0.0",
+    "@tavily/core": "^0.7.7",
+    "@teleologyhi-sdk/him": "^1.0.1",
+    "@teleologyhi-sdk/maic": "^1.0.1",
+    "@teleologyhi-sdk/nhe": "^1.0.1",
+    "exa-js": "^2.18.1",
+    "framer-motion": "^13.1.1",
+    "next": "16.3.2",
+    "radix-ui": "^1.6.7",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "ulid": "^3.0.2",
+    "uuid": "^14.0.2",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@biomejs/biome": "2.5.10",
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/node": "^26",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.11",
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4",
+    "typescript": "^7",
+    "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "@sentry/cli@2.58.6": true,
+    "fsevents@2.3.3": true,
+    "fsevents@2.3.2": true
+  }
+}

@@ -1,0 +1,321 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ * Primitive layer: the seven approved brand colors, never used directly by components.
+ * Semantic layer: role-based tokens consumed by components, remapped per theme.
+ * Light mode is the default theme; dark mode activates via [data-theme="dark"].
+ */
+:root {
+  /* Primitive palette */
+  --palette-white: #ffffff;
+  --palette-cream: #fff7e8;
+  --palette-gold: #cfa451;
+  --palette-gold-muted: #bfb383;
+  --palette-graphite: #484848;
+  --palette-ink: #1a1a1a;
+  --palette-navy: #1d1f37;
+
+  /* Semantic surfaces */
+  --surface-page: var(--palette-cream);
+  --surface-card: var(--palette-white);
+  --surface-panel: var(--palette-navy);
+  --surface-raised: color-mix(
+    in srgb,
+    var(--palette-white) 88%,
+    var(--palette-gold) 12%
+  );
+  --surface-inset: color-mix(
+    in srgb,
+    var(--palette-cream) 60%,
+    var(--palette-white) 40%
+  );
+
+  /* Semantic text */
+  --text-strong: var(--palette-ink);
+  --text-soft: var(--palette-graphite);
+  --text-inverse: var(--palette-cream);
+  --text-inverse-soft: color-mix(
+    in srgb,
+    var(--palette-cream) 64%,
+    var(--palette-navy) 36%
+  );
+
+  /* Brand accents */
+  --brand: var(--palette-gold);
+  --brand-muted: var(--palette-gold-muted);
+  /*
+   * Reads against the brand surface. The brand colour is the same gold in both
+   * themes, so its contrast colour is the same navy in both themes; flipping it
+   * per theme puts cream on gold and drops the pair to 2.17 to one.
+   */
+  --brand-contrast: var(--palette-navy);
+  /* Hover of the panel surface, dark enough for inverse text in both themes. */
+  --surface-panel-hover: color-mix(
+    in srgb,
+    var(--palette-navy) 86%,
+    var(--palette-white) 14%
+  );
+
+  /* Scrim behind an overlay, so the surface below stays readable but inert */
+  --surface-scrim: color-mix(in srgb, var(--palette-navy) 52%, transparent);
+
+  /* Lines and focus */
+  --line: color-mix(
+    in srgb,
+    var(--palette-gold-muted) 36%,
+    var(--palette-white) 64%
+  );
+  --line-strong: color-mix(
+    in srgb,
+    var(--palette-graphite) 28%,
+    var(--palette-white) 72%
+  );
+  --focus-ring: var(--palette-navy);
+
+  /* Semantic states, derived exclusively from the approved palette */
+  --state-attention: var(--palette-gold);
+  --state-attention-soft: color-mix(
+    in srgb,
+    var(--palette-gold) 18%,
+    var(--palette-white) 82%
+  );
+  --state-critical: var(--palette-navy);
+  --state-critical-soft: color-mix(
+    in srgb,
+    var(--palette-navy) 10%,
+    var(--palette-white) 90%
+  );
+  --state-neutral: var(--palette-graphite);
+  --state-neutral-soft: color-mix(
+    in srgb,
+    var(--palette-graphite) 10%,
+    var(--palette-white) 90%
+  );
+
+  /*
+   * Type scale, sized for sustained reading by adult professionals.
+   * The floor is 0.875rem: no interface text is ever smaller, because the
+   * operators read case data for hours and must not strain to do it.
+   */
+  --type-xs: 0.875rem;
+  --type-xs-leading: 1.25rem;
+  --type-sm: 1rem;
+  --type-sm-leading: 1.5rem;
+  --type-base: 1.125rem;
+  --type-base-leading: 1.75rem;
+  --type-lg: 1.25rem;
+  --type-lg-leading: 1.75rem;
+  --type-xl: 1.5rem;
+  --type-xl-leading: 2rem;
+  --type-2xl: 1.75rem;
+  --type-2xl-leading: 2.25rem;
+  --type-3xl: 2.125rem;
+  --type-3xl-leading: 2.5rem;
+  --type-4xl: 2.5rem;
+  --type-4xl-leading: 2.75rem;
+  --type-5xl: 3.25rem;
+  --type-5xl-leading: 3.5rem;
+
+  /* Shape scale */
+  --shape-xs: 0.375rem;
+  --shape-sm: 0.625rem;
+  --shape-md: 1rem;
+  --shape-lg: 1.5rem;
+  --shape-xl: 2rem;
+  --shape-pill: 9999px;
+
+  /*
+   * Layout measures. A column width is a measure like any other, so it lives
+   * here and not inside a component, and a screen that changes its proportion
+   * changes one line instead of six.
+   */
+  --layout-panel-columns: 360px 1fr;
+  --layout-detail-columns: 1fr 400px;
+  --layout-record-columns: minmax(320px, 420px) 1fr;
+  --layout-client-row-columns: minmax(240px, 1.2fr) minmax(0, 1fr)
+    minmax(0, 1.2fr) auto auto;
+  --overlay-max-height: 70dvh;
+  --overlay-max-height-tall: 80dvh;
+  --overlay-max-width: calc(100vw - 2rem);
+  --overlay-chat-width: 26rem;
+  --overlay-bubble-max-width: 85%;
+
+  /* Border weights */
+  --border-thin: 1px;
+  --border-strong: 2px;
+
+  /* Elevation */
+  --elevation-card:
+    0 1px 2px rgb(29 31 55 / 5%), 0 10px 30px rgb(29 31 55 / 7%);
+  --elevation-panel: 0 18px 44px rgb(29 31 55 / 22%);
+  --elevation-none: none;
+
+  /* Motion */
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-theme="dark"] {
+  --surface-page: var(--palette-ink);
+  --surface-card: color-mix(
+    in srgb,
+    var(--palette-navy) 62%,
+    var(--palette-ink) 38%
+  );
+  --surface-panel: var(--palette-navy);
+  --surface-raised: color-mix(
+    in srgb,
+    var(--palette-navy) 76%,
+    var(--palette-gold) 24%
+  );
+  --surface-inset: color-mix(
+    in srgb,
+    var(--palette-ink) 72%,
+    var(--palette-navy) 28%
+  );
+
+  --text-strong: var(--palette-cream);
+  --text-soft: color-mix(
+    in srgb,
+    var(--palette-cream) 62%,
+    var(--palette-gold-muted) 38%
+  );
+  --text-inverse: var(--palette-cream);
+  --text-inverse-soft: color-mix(
+    in srgb,
+    var(--palette-cream) 64%,
+    var(--palette-navy) 36%
+  );
+
+  --brand: var(--palette-gold);
+  --brand-muted: var(--palette-gold-muted);
+  --surface-panel-hover: color-mix(
+    in srgb,
+    var(--palette-navy) 74%,
+    var(--palette-gold) 26%
+  );
+
+  --surface-scrim: color-mix(in srgb, var(--palette-ink) 68%, transparent);
+
+  --line: color-mix(
+    in srgb,
+    var(--palette-gold-muted) 22%,
+    var(--palette-ink) 78%
+  );
+  --line-strong: color-mix(
+    in srgb,
+    var(--palette-gold-muted) 40%,
+    var(--palette-ink) 60%
+  );
+  --focus-ring: var(--palette-gold);
+
+  --state-attention: var(--palette-gold);
+  --state-attention-soft: color-mix(
+    in srgb,
+    var(--palette-gold) 22%,
+    var(--palette-ink) 78%
+  );
+  --state-critical: var(--palette-gold-muted);
+  --state-critical-soft: color-mix(
+    in srgb,
+    var(--palette-navy) 55%,
+    var(--palette-ink) 45%
+  );
+  --state-neutral: var(--palette-gold-muted);
+  --state-neutral-soft: color-mix(
+    in srgb,
+    var(--palette-graphite) 26%,
+    var(--palette-ink) 74%
+  );
+
+  --elevation-card: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 35%);
+  --elevation-panel: 0 18px 44px rgb(0 0 0 / 45%);
+}
+
+@theme inline {
+  --color-page: var(--surface-page);
+  --color-card: var(--surface-card);
+  --color-panel: var(--surface-panel);
+  --color-panel-hover: var(--surface-panel-hover);
+  --color-raised: var(--surface-raised);
+  --color-inset: var(--surface-inset);
+  --color-scrim: var(--surface-scrim);
+  --color-ink: var(--text-strong);
+  --color-ink-soft: var(--text-soft);
+  --color-ink-inverse: var(--text-inverse);
+  --color-ink-inverse-soft: var(--text-inverse-soft);
+  --color-brand: var(--brand);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ring: var(--focus-ring);
+  --color-attention: var(--state-attention);
+  --color-attention-soft: var(--state-attention-soft);
+  --color-critical: var(--state-critical);
+  --color-critical-soft: var(--state-critical-soft);
+  --color-neutral: var(--state-neutral);
+  --color-neutral-soft: var(--state-neutral-soft);
+
+  --font-sans: var(--font-urbanist), ui-sans-serif, system-ui, sans-serif;
+
+  --text-xs: var(--type-xs);
+  --text-xs--line-height: var(--type-xs-leading);
+  --text-sm: var(--type-sm);
+  --text-sm--line-height: var(--type-sm-leading);
+  --text-base: var(--type-base);
+  --text-base--line-height: var(--type-base-leading);
+  --text-lg: var(--type-lg);
+  --text-lg--line-height: var(--type-lg-leading);
+  --text-xl: var(--type-xl);
+  --text-xl--line-height: var(--type-xl-leading);
+  --text-2xl: var(--type-2xl);
+  --text-2xl--line-height: var(--type-2xl-leading);
+  --text-3xl: var(--type-3xl);
+  --text-3xl--line-height: var(--type-3xl-leading);
+  --text-4xl: var(--type-4xl);
+  --text-4xl--line-height: var(--type-4xl-leading);
+  --text-5xl: var(--type-5xl);
+  --text-5xl--line-height: var(--type-5xl-leading);
+
+  --radius-xs: var(--shape-xs);
+  --radius-sm: var(--shape-sm);
+  --radius-md: var(--shape-md);
+  --radius-lg: var(--shape-lg);
+  --radius-xl: var(--shape-xl);
+
+  --shadow-card: var(--elevation-card);
+  --shadow-panel: var(--elevation-panel);
+}
+
+body {
+  background: var(--surface-page);
+  color: var(--text-strong);
+  font-family: var(--font-urbanist), ui-sans-serif, system-ui, sans-serif;
+  transition:
+    background-color var(--motion-base) var(--ease-standard),
+    color var(--motion-base) var(--ease-standard);
+}
+
+:focus-visible {
+  outline: var(--border-strong) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must defeat every inline transition */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must defeat every inline transition */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must defeat every inline transition */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must defeat every inline transition */
+    scroll-behavior: auto !important;
+  }
+}
