@@ -9,12 +9,27 @@ import { captureHealth } from "@/lib/capture/runs";
  * ago and loses a deadline.
  */
 
-function dateTimeLabel(iso: string | null): string {
-  if (iso === null) {
-    return "nunca";
-  }
+function dateTimeLabel(iso: string): string {
   const date = new Date(iso);
   return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}, ${String(date.getHours()).padStart(2, "0")}h${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/*
+ * A moment that does not exist is not written as a date: the sentence changes
+ * shape instead, because "última execução em nunca" is not Portuguese and an
+ * interface that writes it teaches the office to stop reading it.
+ */
+function runSentence(
+  lastRunAt: string | null,
+  lastSuccessAt: string | null,
+): string {
+  if (lastRunAt === null) {
+    return "Nenhuma execução registrada até agora.";
+  }
+  const first = `Última execução em ${dateTimeLabel(lastRunAt)}.`;
+  return lastSuccessAt === null
+    ? `${first} Nenhuma captura bem-sucedida até agora.`
+    : `${first} Última captura bem-sucedida em ${dateTimeLabel(lastSuccessAt)}.`;
 }
 
 export async function CaptureHealth() {
@@ -65,8 +80,7 @@ export async function CaptureHealth() {
               </span>
             </div>
             <p className="text-xs text-ink-soft">
-              Última execução em {dateTimeLabel(source.lastRunAt)}; última
-              captura bem-sucedida em {dateTimeLabel(source.lastSuccessAt)}.
+              {runSentence(source.lastRunAt, source.lastSuccessAt)}
             </p>
             {source.lastResult === null ? null : (
               <p className="text-xs text-ink-soft">{source.lastResult}</p>

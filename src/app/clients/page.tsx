@@ -1,13 +1,11 @@
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ClientsExplorer } from "@/components/clients/clients-explorer";
 import { TopNav } from "@/components/dashboard/top-nav";
 import { MotionReveal } from "@/components/motion/motion-reveal";
 import { StoredClientsList } from "@/components/records/stored-clients-list";
 import { primaryButtonClasses } from "@/components/ui/form-field";
 import { GovernanceNote } from "@/components/ui/governance-note";
-import { personaClients } from "@/lib/persona";
 import { listAllCases, listClients } from "@/lib/records-store";
 
 export const metadata: Metadata = {
@@ -48,9 +46,6 @@ export default async function ClientsPage() {
               return totals;
             }, {})}
           />
-        </MotionReveal>
-        <MotionReveal order={2}>
-          <ClientsExplorer clients={personaClients} />
         </MotionReveal>
       </main>
       <GovernanceNote>

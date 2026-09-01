@@ -19,7 +19,8 @@ export function ForecastCard() {
             Previsão de recebimento
           </h2>
           <p className="text-sm text-ink-soft">
-            Estimativas, nunca valores definitivos; a soma fecha a previsão.
+            Estimativas, nunca valores definitivos, cada uma com a condição de
+            que depende.
           </p>
         </div>
       </header>

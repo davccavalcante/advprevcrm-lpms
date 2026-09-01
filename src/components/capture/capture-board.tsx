@@ -89,12 +89,27 @@ export type BoardCase = {
   label: string;
 };
 
-function dateTimeLabel(iso: string | null): string {
-  if (iso === null) {
-    return "nunca";
-  }
+function dateTimeLabel(iso: string): string {
   const date = new Date(iso);
   return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}, ${String(date.getHours()).padStart(2, "0")}h${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/*
+ * A moment that does not exist is not written as a date: the sentence changes
+ * shape instead, because "última execução em nunca" is not Portuguese and an
+ * interface that writes it teaches the office to stop reading it.
+ */
+function runSentence(
+  lastRunAt: string | null,
+  lastSuccessAt: string | null,
+): string {
+  if (lastRunAt === null) {
+    return "Nenhuma execução registrada até agora.";
+  }
+  const first = `Última execução em ${dateTimeLabel(lastRunAt)}.`;
+  return lastSuccessAt === null
+    ? `${first} Nenhuma captura bem-sucedida até agora.`
+    : `${first} Última captura bem-sucedida em ${dateTimeLabel(lastSuccessAt)}.`;
 }
 
 function brDate(value: string): string {
@@ -227,9 +242,8 @@ export function CaptureBoard({
             </p>
             <p className="text-xs text-ink-soft">{source.role}</p>
             <p className="text-xs text-ink">
-              {source.statusLabel}. Última execução em{" "}
-              {dateTimeLabel(source.lastRunAt)}; última captura bem-sucedida em{" "}
-              {dateTimeLabel(source.lastSuccessAt)}.
+              {source.statusLabel}.{" "}
+              {runSentence(source.lastRunAt, source.lastSuccessAt)}
             </p>
             {source.lastResult === null ? null : (
               <p className="text-xs text-ink-soft">{source.lastResult}</p>

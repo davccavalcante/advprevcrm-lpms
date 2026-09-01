@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { monthlyActivity } from "@/lib/persona";
+import type { PublicationDay } from "@/lib/capture/board-data";
 
 const periodOptions = [
   { id: "14", label: "14 dias", days: 14 },
@@ -11,19 +11,21 @@ const periodOptions = [
 
 type PeriodId = (typeof periodOptions)[number]["id"];
 
-export function ActivityChart() {
+export function ActivityChart({ activity }: { activity: PublicationDay[] }) {
   const [period, setPeriod] = useState<PeriodId>("14");
 
   const { days, total, maxValue } = useMemo(() => {
     const option =
       periodOptions.find((entry) => entry.id === period) ?? periodOptions[0];
-    const selected = monthlyActivity.slice(-option.days);
+    const selected = activity.slice(-option.days);
     return {
       days: selected,
       total: selected.reduce((sum, entry) => sum + entry.publications, 0),
-      maxValue: Math.max(...selected.map((entry) => entry.publications)),
+      /* Never zero, so the height of a bar is a number even on a day the
+       * office captured nothing. */
+      maxValue: Math.max(1, ...selected.map((entry) => entry.publications)),
     };
-  }, [period]);
+  }, [activity, period]);
 
   return (
     <section

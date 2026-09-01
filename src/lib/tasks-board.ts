@@ -2,15 +2,14 @@ import "server-only";
 import { captureHealth } from "@/lib/capture/runs";
 import { listCommunications } from "@/lib/capture/store";
 import { type CaseStatusId, caseStatuses } from "@/lib/case-domain";
-import { listUnifiedCases, type UnifiedCase } from "@/lib/case-views";
-import { officeProfile } from "@/lib/office-profile";
 import {
-  administrativeExigencies,
-  criticalDeadlines,
-  myTasks,
-  riskAlerts,
-  weeklyAgenda,
-} from "@/lib/persona";
+  criticalDeadlineList,
+  listUnifiedCases,
+  type UnifiedCase,
+  weekAppointments,
+} from "@/lib/case-views";
+import { officeProfile } from "@/lib/office-profile";
+import { administrativeExigencies, myTasks, riskAlerts } from "@/lib/persona";
 import { listAllCases } from "@/lib/records-store";
 
 /*
@@ -22,9 +21,9 @@ import { listAllCases } from "@/lib/records-store";
  * law imposes.
  *
  * Every count is computed here at render time, from the same sources the other
- * screens read: the unified case layer, the capture store and the demonstration
- * dataset of the operation. A number invented for this board would be a second
- * truth on the same product, which this project has already paid for twice.
+ * screens read: the unified case layer and the capture store. A number invented
+ * for this board would be a second truth on the same product, which this
+ * project has already paid for twice.
  */
 
 export type BoardCardKind =
@@ -119,11 +118,14 @@ function caseLabelOf(entry: UnifiedCase | undefined, caseRef: string): string {
 }
 
 export async function buildTasksBoard(): Promise<TasksBoard> {
-  const [cases, communications, health] = await Promise.all([
-    listUnifiedCases(),
-    listCommunications(),
-    captureHealth(),
-  ]);
+  const [cases, communications, health, deadlines, appointments] =
+    await Promise.all([
+      listUnifiedCases(),
+      listCommunications(),
+      captureHealth(),
+      criticalDeadlineList(),
+      weekAppointments(),
+    ]);
   const byRef = caseIndexOf(cases);
 
   /* Column one, what arrived by an official source and is not work yet. */
@@ -236,21 +238,20 @@ export async function buildTasksBoard(): Promise<TasksBoard> {
   /* Column two, the acts the constitution of this office reserves to a person:
    * confirming a deadline, validating a low confidence reading, resolving an
    * act that carries two possible deadlines, treating a legal risk. */
-  for (const deadline of criticalDeadlines) {
-    if (deadline.status !== "calculated") {
+  for (const deadline of deadlines) {
+    if (deadline.state !== "calculated") {
       continue;
     }
-    const entry = byRef.get(deadline.caseRef);
     decide.push({
       id: `decide-deadline-${deadline.id}`,
       kind: "deadline",
       title: "Confirmar o prazo calculado",
-      client: deadline.client,
-      caseLabel: caseLabelOf(entry, deadline.caseRef),
-      detail: `${deadline.benefit}, ${deadline.dueLabel}. O prazo nasceu calculado e só passa a confirmado por ato seu, registrado em auditoria.`,
+      client: deadline.clientName,
+      caseLabel: caseLabelOf(byRef.get(deadline.caseRef), deadline.caseRef),
+      detail: `${deadline.label}, vence em ${deadline.dueOn}. O prazo nasceu calculado e só passa a confirmado por ato seu, registrado em auditoria.`,
       chips: [DEADLINE_STATE_CHIP.calculated],
       href: deadline.href,
-      destinationLabel: deadline.destinationLabel,
+      destinationLabel: "Ficha do caso",
     });
   }
 
@@ -307,21 +308,20 @@ export async function buildTasksBoard(): Promise<TasksBoard> {
       destinationLabel: entry === undefined ? "Agenda" : "Ficha do caso",
     });
   }
-  for (const deadline of criticalDeadlines) {
-    if (deadline.status !== "confirmed") {
+  for (const deadline of deadlines) {
+    if (deadline.state !== "confirmed") {
       continue;
     }
-    const entry = byRef.get(deadline.caseRef);
     todo.push({
       id: `todo-deadline-${deadline.id}`,
       kind: "deadline",
       title: "Cumprir o prazo confirmado",
-      client: deadline.client,
-      caseLabel: caseLabelOf(entry, deadline.caseRef),
-      detail: `${deadline.benefit}, ${deadline.dueLabel}.`,
+      client: deadline.clientName,
+      caseLabel: caseLabelOf(byRef.get(deadline.caseRef), deadline.caseRef),
+      detail: `${deadline.label}, vence em ${deadline.dueOn}.`,
       chips: [DEADLINE_STATE_CHIP.confirmed],
       href: deadline.href,
-      destinationLabel: deadline.destinationLabel,
+      destinationLabel: "Ficha do caso",
     });
   }
   for (const exigency of administrativeExigencies) {
@@ -372,21 +372,20 @@ export async function buildTasksBoard(): Promise<TasksBoard> {
     });
   }
 
-  /* Column five, what depends on a scheduled date or on a third party. */
-  const waiting: BoardCard[] = weeklyAgenda.map((item) => {
-    const entry = byRef.get(item.caseRef);
-    return {
-      id: `waiting-${item.id}`,
-      kind: item.kind,
-      title: item.kind === "hearing" ? "Audiência marcada" : "Perícia marcada",
-      client: item.client,
-      caseLabel: caseLabelOf(entry, item.caseRef),
-      detail: `${item.whenLabel}, ${item.placeLabel}.`,
-      chips: [{ label: "Data marcada", tone: "neutral" }],
-      href: "/agenda",
-      destinationLabel: "Agenda",
-    };
-  });
+  /* Column five, what depends on a scheduled date or on a third party. The
+   * appointments come from the same reading the panel uses, so the board and
+   * the agenda card can never disagree about the week. */
+  const waiting: BoardCard[] = appointments.map((item) => ({
+    id: `waiting-${item.id}`,
+    kind: item.kind,
+    title: item.kind === "hearing" ? "Audiência marcada" : "Perícia marcada",
+    client: item.clientName,
+    caseLabel: caseLabelOf(byRef.get(item.caseRef), item.caseRef),
+    detail: `${item.date}${item.time === null ? "" : `, ${item.time}`}, ${item.place ?? "local não registrado no ato"}.`,
+    chips: [{ label: "Data marcada", tone: "neutral" }],
+    href: item.href,
+    destinationLabel: "Ficha do caso",
+  }));
 
   /* Column six, what closed and stays as record. */
   const done: BoardCard[] = cases

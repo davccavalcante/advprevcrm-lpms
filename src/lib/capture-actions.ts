@@ -25,6 +25,7 @@ import {
   setReminderDone,
   setTaskState,
 } from "@/lib/records-store";
+import { currentSession } from "@/lib/trinity/nhe-actions";
 
 /*
  * The only writes the capture is allowed to make, and every one of them either
@@ -39,7 +40,18 @@ import {
  * and mark a reminder as done.
  */
 
-const OPERATOR = "Mendelsson Sandrini Alves Maciel";
+/*
+ * Who is acting. The name is the one of the member signed in, read on the
+ * server from the session, never a name written in code: a trail that names the
+ * wrong person is worse than no trail, and this office will have more than one
+ * member.
+ */
+async function operator(): Promise<string> {
+  const session = await currentSession();
+  return session.lawyerName.length > 0
+    ? session.lawyerName
+    : "sessão sem perfil";
+}
 
 export type CaptureActionResult = { ok: boolean; message: string };
 
@@ -142,6 +154,7 @@ export async function linkCommunicationAction(
     return { ok: false, message: "Caso não encontrado." };
   }
 
+  const actor = await operator();
   await updateCommunication(communicationId, (current) => ({
     ...current,
     link: {
@@ -149,7 +162,7 @@ export async function linkCommunicationAction(
       caseId,
       method: "human",
       linkedAt: new Date().toISOString(),
-      linkedBy: OPERATOR,
+      linkedBy: actor,
     },
     suggestions: [],
   }));
@@ -184,7 +197,8 @@ export async function confirmDeadlineAction(
   caseId: string,
   deadlineId: string,
 ): Promise<CaptureActionResult> {
-  const updated = await confirmDeadline(clientId, caseId, deadlineId, OPERATOR);
+  const actor = await operator();
+  const updated = await confirmDeadline(clientId, caseId, deadlineId, actor);
   if (updated === null) {
     return { ok: false, message: "Caso não encontrado." };
   }
@@ -192,7 +206,7 @@ export async function confirmDeadlineAction(
   revalidatePath(`/casos/${clientId}/${caseId}`);
   return {
     ok: true,
-    message: `Prazo confirmado por ${OPERATOR}, com data e hora registradas.`,
+    message: `Prazo confirmado por ${actor}, com data e hora registradas.`,
   };
 }
 
@@ -202,7 +216,13 @@ export async function setTaskStateAction(
   taskId: string,
   state: CaseTask["state"],
 ): Promise<CaptureActionResult> {
-  const updated = await setTaskState(clientId, caseId, taskId, state, OPERATOR);
+  const updated = await setTaskState(
+    clientId,
+    caseId,
+    taskId,
+    state,
+    await operator(),
+  );
   if (updated === null) {
     return { ok: false, message: "Caso não encontrado." };
   }
@@ -216,7 +236,12 @@ export async function markReminderDoneAction(
   caseId: string,
   reminderId: string,
 ): Promise<CaptureActionResult> {
-  const updated = await setReminderDone(clientId, caseId, reminderId, OPERATOR);
+  const updated = await setReminderDone(
+    clientId,
+    caseId,
+    reminderId,
+    await operator(),
+  );
   if (updated === null) {
     return { ok: false, message: "Caso não encontrado." };
   }
@@ -334,6 +359,7 @@ export async function linkProcessAction(
     (entry) => entry.processNumber === canonical && entry.link === null,
   );
   const at = new Date().toISOString();
+  const actor = await operator();
   for (const entry of targets) {
     await updateCommunication(entry.id, (current) => ({
       ...current,
@@ -342,7 +368,7 @@ export async function linkProcessAction(
         caseId,
         method: "human",
         linkedAt: at,
-        linkedBy: OPERATOR,
+        linkedBy: actor,
       },
       suggestions: [],
     }));

@@ -7,8 +7,8 @@ import {
   questionTouchesDocuments,
 } from "@/lib/extraction/extraction-store";
 import { CONFIDENCE_PROCESSED } from "@/lib/extraction/local-extraction";
-import { officeProfile } from "@/lib/office-profile";
-import { listAllCases } from "@/lib/records-store";
+import { appendAuditEvent, listAllCases } from "@/lib/records-store";
+import { serverSupabase } from "@/lib/supabase/server";
 import {
   cacheable,
   cacheKey,
@@ -33,8 +33,11 @@ import { liveSearchBlock } from "@/lib/trinity/live-search";
 import { withOfficeContext } from "@/lib/trinity/office-adapter";
 import {
   contextBlock,
+  conversationalBlock,
   countOperationalLines,
+  emptyView,
   type LawyerSession,
+  questionNeedsOfficeRecords,
   resolveAllowedView,
 } from "@/lib/trinity/office-context";
 import {
@@ -58,16 +61,37 @@ import { openUniverse } from "@/lib/trinity/universe";
  * user and to the hash-chained audit of MAIC.
  */
 
-/* The only session of this phase. The chief lawyer is administrator and
- * therefore receives one hundred per cent, with no suppression. The name
- * comes from the editable account profile, so a rename on the settings
- * screen renames the author of every audited action from that moment on. */
+/* Who is speaking. The session is the authenticated one and nothing else:
+ * the identifier is the account of the member, the name is the one written in
+ * the profile, so a rename on the settings screen renames the author of every
+ * audited action from that moment on, and the scope comes from the team the
+ * database assigned, not from anything the screen may claim. Without a session
+ * there is no member, and the caller receives the narrowest scope there is. */
 export async function currentSession(): Promise<LawyerSession> {
-  const profile = await officeProfile();
+  const supabase = await serverSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { lawyerId: "", lawyerName: "", role: "lawyer" };
+  }
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, first_name, last_name, team")
+    .eq("id", user.id)
+    .maybeSingle<{
+      id: string;
+      first_name: string;
+      last_name: string;
+      team: string;
+    }>();
+  if (!data) {
+    return { lawyerId: user.id, lawyerName: "", role: "lawyer" };
+  }
   return {
-    lawyerId: "mendelsson",
-    lawyerName: profile.fullName,
-    role: "admin",
+    lawyerId: data.id,
+    lawyerName: `${data.first_name} ${data.last_name}`.trim(),
+    role: data.team === "administration" ? "admin" : "lawyer",
   };
 }
 
@@ -171,13 +195,6 @@ export async function askDavid(
 ): Promise<NheTurn> {
   const at = new Date().toISOString();
   const session = await currentSession();
-  const view = await resolveAllowedView(session);
-  const contextSummary = {
-    cases: view.cases.length,
-    finance: view.finance.length,
-    suppressed: view.suppressed.financialLines,
-    operations: countOperationalLines(view),
-  };
 
   const trimmed = question.trim();
   if (trimmed.length === 0) {
@@ -185,14 +202,41 @@ export async function askDavid(
       ok: false,
       unavailableReason: "Pergunta vazia.",
       at,
-      contextSummary,
+      contextSummary: { cases: 0, finance: 0, suppressed: 0, operations: 0 },
     };
   }
 
-  let universe: Awaited<ReturnType<typeof openUniverse>>;
-  try {
-    universe = await openUniverse();
-  } catch {
+  /*
+   * What this question needs. A greeting, a thank you or a question about who
+   * the entity is opens nothing: measured on 2026-09-01, the office reading
+   * alone cost seconds on every turn, including on "OI", and the panel said the
+   * entity was reading the records while it had nothing to read. Anything that
+   * names something the office keeps reads everything, and everything means the
+   * whole office and never the screen the lawyer is looking at.
+   */
+  const needsOffice = questionNeedsOfficeRecords(trimmed);
+
+  /* The three openings that do not depend on one another travel together. */
+  const [view, universeResult, user] = await Promise.all([
+    needsOffice ? resolveAllowedView(session) : Promise.resolve(null),
+    openUniverse().then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const, value: null }),
+    ),
+    ensureUser(session.lawyerId, session.lawyerName, session.role),
+  ]);
+
+  const contextSummary =
+    view === null
+      ? { cases: 0, finance: 0, suppressed: 0, operations: 0 }
+      : {
+          cases: view.cases.length,
+          finance: view.finance.length,
+          suppressed: view.suppressed.financialLines,
+          operations: countOperationalLines(view),
+        };
+
+  if (!universeResult.ok || universeResult.value === null) {
     return {
       ok: false,
       unavailableReason:
@@ -201,12 +245,12 @@ export async function askDavid(
       contextSummary,
     };
   }
+  const universe = universeResult.value;
 
-  const user = await ensureUser(
-    session.lawyerId,
-    session.lawyerName,
-    session.role,
-  );
+  /* The guards always run against a view. A turn that read nothing is guarded
+   * against an empty scope, where every figure is out of scope. */
+  const guardView = view ?? emptyView(session);
+
   const conversation = await openConversation(
     user.userId,
     universe.himId,
@@ -218,21 +262,27 @@ export async function askDavid(
     await appendTurn(conversation, turn);
   };
 
-  const documents = await documentBlock(trimmed);
-  /* The live research of the world outside the records, when the question
-   * asks for it: the server searches Exa and Tavily with the query minimized
-   * of direct identifiers, and the results travel in the governed context
-   * like the document passages do. The block itself tells the model to cite
-   * every origin and that a search result is never a source of a deadline. */
-  const search = await liveSearchBlock(
-    trimmed,
-    view.cases.map((entry) => entry.clientName),
-  );
-  const office = [
-    contextBlock(view, screenContext),
-    documents.block,
-    search.block,
-  ]
+  /* The local passages and the research of the world outside the records travel
+   * together as well, and neither of them runs for a turn of courtesy. The
+   * search block tells the model to cite every origin and that a search result
+   * is never a source of a deadline. */
+  const [documents, search] = await Promise.all([
+    needsOffice
+      ? documentBlock(trimmed)
+      : Promise.resolve({ block: "", passages: [] as Passage[] }),
+    needsOffice && view !== null
+      ? liveSearchBlock(
+          trimmed,
+          view.cases.map((entry) => entry.clientName),
+        )
+      : Promise.resolve({ block: "", providers: [] as string[] }),
+  ]);
+
+  const office = (
+    view === null
+      ? [conversationalBlock(session)]
+      : [contextBlock(view), documents.block, search.block]
+  )
     .filter((part) => part.length > 0)
     .join("\n\n");
 
@@ -267,14 +317,14 @@ export async function askDavid(
   /* The ledger names the model that produced the exchange. Before the call it
    * is the pool label; after the call it is the model that really answered,
    * read from the transport by the caller and passed here. */
-  const spend = (
+  const spend = async (
     outcome: Parameters<typeof recordSpend>[0]["outcome"],
     tokensIn: number,
     tokensOut: number,
     tokensSaved = 0,
     model: string = universe.model,
-  ) =>
-    recordSpend({
+  ) => {
+    await recordSpend({
       at,
       conversationId: conversation.conversationId,
       lawyerId: session.lawyerId,
@@ -287,12 +337,33 @@ export async function askDavid(
       tokensOut,
       tokensSaved,
     });
+    /* Every exchange with the reasoning layer is an audited act of the office,
+     * and the administration reads the trail of them beside every other act.
+     * What is written is the shape of the exchange, never its content: the
+     * question and the answer live in the conversation of that user, and
+     * copying them here would spread the same personal data twice. */
+    await appendAuditEvent({
+      action: "intelligence-exchange",
+      entity: "conversation",
+      entityId: conversation.conversationId,
+      actor: session.lawyerName,
+      after: {
+        model,
+        screen: screenContext,
+        outcome,
+        tokensIn,
+        tokensOut,
+        tokensSaved,
+        assisted: true,
+        at,
+      },
+    });
+  };
 
   /* The same question, over the same records, already answered inside the
    * window: the answer is on disk and costs nothing to give again. */
   const key = cacheKey({
     question: trimmed,
-    screen: screenContext,
     lawyerId: session.lawyerId,
     contextFingerprint: contextFingerprint(office),
     model: universe.model,
@@ -430,46 +501,6 @@ export async function askDavid(
     const answeredModel =
       universe.transport.outcome()?.modelId ?? universe.model;
 
-    /* The records must have reached the reasoning layer. An answer produced
-     * without them is a blind answer, and a blind answer delivered as if it
-     * were informed is the worst thing this surface can do to a lawyer. */
-    if (!contextUsed) {
-      const reason =
-        "Os registros do escritório não chegaram à camada de raciocínio, então nenhuma resposta foi entregue. Isto é uma falha do sistema, não uma limitação da consulta. Tente novamente e, se persistir, avise a administração.";
-      await observeExchange(
-        "unavailable",
-        output.tokens.in,
-        output.tokens.out,
-        "",
-        universe.transport.outcome(),
-      );
-      await record({
-        at,
-        userPrompt: trimmed,
-        answer: "",
-        kind: "unavailable",
-        model: answeredModel,
-        projectVersion: PROJECT_VERSION,
-        tokens: { in: output.tokens.in, out: output.tokens.out },
-        context: contextSummary,
-        blockReason: reason,
-      });
-      await spend(
-        "unavailable",
-        output.tokens.in,
-        output.tokens.out,
-        0,
-        answeredModel,
-      );
-      return {
-        ok: false,
-        unavailableReason: reason,
-        at,
-        conversationId: conversation.conversationId,
-        contextSummary,
-      };
-    }
-
     const citedAxioms = [
       ...new Set([
         ...(output.preReviewVerdict.citedAxioms ?? []),
@@ -532,12 +563,99 @@ export async function askDavid(
       };
     }
 
+    /* The governance decided before the model, and its verdict is the answer.
+     * The blind answer guard only applies to text the model produced: measured
+     * on 2026-09-01, a refusal of MAIC never reaches the adapter, so the guard
+     * fired on it and the lawyer was told the system had failed instead of
+     * being told that confirming a deadline is his own act. */
+    /* The records must have reached the reasoning layer. An answer produced
+     * without them is a blind answer, and a blind answer delivered as if it
+     * were informed is the worst thing this surface can do to a lawyer. */
+    if (!contextUsed) {
+      const reason =
+        "Os registros do escritório não chegaram à camada de raciocínio, então nenhuma resposta foi entregue. Isto é uma falha do sistema, não uma limitação da consulta. Tente novamente e, se persistir, avise a administração.";
+      await observeExchange(
+        "unavailable",
+        output.tokens.in,
+        output.tokens.out,
+        "",
+        universe.transport.outcome(),
+      );
+      await record({
+        at,
+        userPrompt: trimmed,
+        answer: "",
+        kind: "unavailable",
+        model: answeredModel,
+        projectVersion: PROJECT_VERSION,
+        tokens: { in: output.tokens.in, out: output.tokens.out },
+        context: contextSummary,
+        blockReason: reason,
+      });
+      await spend(
+        "unavailable",
+        output.tokens.in,
+        output.tokens.out,
+        0,
+        answeredModel,
+      );
+      return {
+        ok: false,
+        unavailableReason: reason,
+        at,
+        conversationId: conversation.conversationId,
+        contextSummary,
+      };
+    }
+
     const answer = presentAnswer(output.text);
+
+    /* An empty bubble is the worst answer this surface can give: it tells the
+     * lawyer nothing and looks like the system worked. A model that produced no
+     * text produced no answer, and the office says so. */
+    if (answer.trim().length === 0) {
+      const reason =
+        "A camada de raciocínio devolveu uma resposta vazia. Nada foi produzido e nada foi registrado como resposta. Pergunte de novo e, se persistir, avise a administração.";
+      await observeExchange(
+        "unavailable",
+        output.tokens.in,
+        output.tokens.out,
+        "",
+        universe.transport.outcome(),
+      );
+      await record({
+        at,
+        userPrompt: trimmed,
+        answer: "",
+        kind: "unavailable",
+        model: answeredModel,
+        projectVersion: PROJECT_VERSION,
+        tokens: { in: output.tokens.in, out: output.tokens.out },
+        context: contextSummary,
+        blockReason: reason,
+      });
+      await spend(
+        "unavailable",
+        output.tokens.in,
+        output.tokens.out,
+        0,
+        answeredModel,
+      );
+      return {
+        ok: false,
+        unavailableReason: reason,
+        at,
+        conversationId: conversation.conversationId,
+        contextSummary,
+      };
+    }
     const language = checkLanguage(answer);
     const disclosure = language.allowed
       ? checkConstitutionalDisclosure(answer)
       : language;
-    const verdict = disclosure.allowed ? checkOutput(answer, view) : disclosure;
+    const verdict = disclosure.allowed
+      ? checkOutput(answer, guardView)
+      : disclosure;
 
     if (!verdict.allowed) {
       await observeExchange(

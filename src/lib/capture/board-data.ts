@@ -192,3 +192,44 @@ export async function captureBoardData(): Promise<{
     monitoredLabels: activeOabs().map((entry) => entry.label),
   };
 }
+
+export type PublicationDay = {
+  day: string;
+  publications: number;
+  highlighted?: boolean;
+};
+
+/*
+ * How many acts the office captured on each of the last days, counted from the
+ * communications themselves. A day with no capture is a zero and appears as
+ * one, because a missing bar and a bar of height zero say very different things
+ * to whoever reads the panel looking for a silent failure.
+ */
+export async function dailyPublications(
+  days: number,
+  now: Date = new Date(),
+): Promise<PublicationDay[]> {
+  const communications = await listCommunications();
+  const counts = new Map<string, number>();
+  for (const communication of communications) {
+    counts.set(
+      communication.availableOn,
+      (counts.get(communication.availableOn) ?? 0) + 1,
+    );
+  }
+
+  const out: PublicationDay[] = [];
+  for (let back = days - 1; back >= 0; back -= 1) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - back);
+    const iso = date.toISOString().slice(0, 10);
+    const publications = counts.get(iso) ?? 0;
+    out.push({
+      day: String(date.getDate()),
+      publications,
+      /* The day being lived is the one the office is deciding about today. */
+      ...(back === 0 ? { highlighted: true } : {}),
+    });
+  }
+  return out;
+}

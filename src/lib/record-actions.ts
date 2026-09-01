@@ -23,6 +23,7 @@ import {
   updateClient,
 } from "@/lib/records-store";
 import { recordDocumentAccess } from "@/lib/trinity/document-access-log";
+import { currentSession } from "@/lib/trinity/nhe-actions";
 
 /*
  * Every write of this phase passes through here, and every one of them validates
@@ -33,7 +34,22 @@ export type ActionResult =
   | { ok: true; id: string }
   | { ok: false; formError?: string; fieldErrors: Record<string, string> };
 
-const OPERATOR = "Mendelsson Sandrini Alves Maciel";
+/*
+ * Who is acting. The name is the one of the member signed in, read on the
+ * server from the session, never a name written in code: a trail that names the
+ * wrong person is worse than no trail, and this office will have more than one
+ * member.
+ */
+async function operator(): Promise<string> {
+  const session = await currentSession();
+  return session.lawyerName.length > 0
+    ? session.lawyerName
+    : "sessão sem perfil";
+}
+
+async function operatorRole(): Promise<string> {
+  return (await currentSession()).role;
+}
 
 function fieldErrorsOf(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -186,7 +202,7 @@ export async function uploadDocumentsAction(
         clientId,
         caseId,
         { name: file.name, type: file.type, bytes },
-        OPERATOR,
+        await operator(),
       );
       outcomes.push({ fileName: file.name, ok: true, documentId: document.id });
       /* The reading starts now and does not hold the upload. The lawyer sees
@@ -318,8 +334,8 @@ export async function readExtractedText(
   }
 
   await recordDocumentAccess({
-    actor: OPERATOR,
-    role: "admin",
+    actor: await operator(),
+    role: await operatorRole(),
     action: "preview",
     documentId,
     fileName: found.document.fileName,

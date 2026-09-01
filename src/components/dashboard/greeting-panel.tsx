@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
+import type { DeadlineSummary } from "@/lib/case-views";
 import { officeProfile } from "@/lib/office-profile";
-import { deadlineOverview } from "@/lib/persona";
 
 const DONUT_SIZE = 240;
 const DONUT_CENTER = DONUT_SIZE / 2;
@@ -17,42 +17,50 @@ type DonutSegment = {
 };
 
 /*
- * The active case count is passed in, never read from the fixture, because it
- * has to be the same number the Casos screen lists. Everything else on this
- * panel is demonstration data and says so.
+ * Every number on this panel is passed in, read once from the records by the
+ * screen that owns them, so a count here can never disagree with the list the
+ * Casos screen shows. An office that has written nothing yet sees zeros, and
+ * zero is the truth about it, not an empty state to be dressed up.
  */
 export async function GreetingPanel({
   activeCaseCount,
+  deadlines,
 }: {
   activeCaseCount: number;
+  deadlines: DeadlineSummary;
 }) {
   const profile = await officeProfile();
   const segments: DonutSegment[] = [
     {
       id: "confirmed",
       label: "Confirmados",
-      value: deadlineOverview.confirmed,
+      value: deadlines.confirmed,
       colorVar: "var(--brand)",
     },
     {
       id: "calculated",
       label: "Calculados",
-      value: deadlineOverview.calculated,
+      value: deadlines.calculated,
       colorVar: "var(--brand-muted)",
     },
     {
       id: "critical",
       label: "Críticos",
-      value: deadlineOverview.critical,
+      value: deadlines.critical,
       colorVar: "var(--text-inverse)",
     },
   ];
-  const total = deadlineOverview.total;
-  const confirmedShare = Math.round((deadlineOverview.confirmed / total) * 100);
+  const total = deadlines.total;
+  /* No deadline written yet is not zero per cent of anything: it is nothing to
+   * divide, and the panel says so instead of printing the result of a division
+   * by zero. */
+  const confirmedShare =
+    total === 0 ? 0 : Math.round((deadlines.confirmed / total) * 100);
 
   let offset = 0;
   const arcs = segments.map((segment) => {
-    const length = (segment.value / total) * DONUT_CIRCUMFERENCE;
+    const length =
+      total === 0 ? 0 : (segment.value / total) * DONUT_CIRCUMFERENCE;
     const arc = { ...segment, length, offset };
     offset += length;
     return arc;
@@ -78,14 +86,14 @@ export async function GreetingPanel({
 
       <Link
         href="/agenda"
-        aria-label={`Prazos da semana, ${deadlineOverview.confirmed} confirmados, ${deadlineOverview.calculated} calculados e ${deadlineOverview.critical} críticos, abrir na Agenda`}
+        aria-label={`Prazos da semana, ${deadlines.confirmed} confirmados, ${deadlines.calculated} calculados e ${deadlines.critical} críticos, abrir na Agenda`}
         className="-m-2 cursor-pointer rounded-lg p-2 transition-colors duration-(--motion-fast) hover:bg-ink-inverse/10"
       >
         <figure className="flex flex-col items-center gap-6">
           <div className="relative w-full max-w-80">
             <svg
               role="img"
-              aria-label={`Prazos da semana: ${deadlineOverview.confirmed} confirmados, ${deadlineOverview.calculated} calculados e ${deadlineOverview.critical} críticos, em um total de ${total}`}
+              aria-label={`Prazos da semana: ${deadlines.confirmed} confirmados, ${deadlines.calculated} calculados e ${deadlines.critical} críticos, em um total de ${total}`}
               viewBox={`0 0 ${DONUT_SIZE} ${DONUT_SIZE}`}
               className="block h-auto w-full"
             >
@@ -123,10 +131,12 @@ export async function GreetingPanel({
               className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1"
             >
               <p className="text-3xl font-bold text-ink-inverse">
-                {confirmedShare}%
+                {total === 0 ? "Sem prazos" : `${confirmedShare}%`}
               </p>
               <p className="text-xs font-medium text-ink-inverse-soft">
-                {deadlineOverview.confirmed} de {total} confirmados
+                {total === 0
+                  ? "Nenhum prazo registrado"
+                  : `${deadlines.confirmed} de ${total} confirmados`}
               </p>
             </div>
           </div>

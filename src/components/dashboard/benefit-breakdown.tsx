@@ -1,7 +1,15 @@
 import Link from "next/link";
-import { activeCasesTotal, casesByBenefit } from "@/lib/persona";
+import {
+  activeCases,
+  countByCaseType,
+  listUnifiedCases,
+} from "@/lib/case-views";
 
-export function BenefitBreakdown() {
+export async function BenefitBreakdown() {
+  const cases = activeCases(await listUnifiedCases());
+  const slices = countByCaseType(cases);
+  const total = cases.length;
+
   return (
     <section
       aria-label="Casos por tipo de benefício"
@@ -18,43 +26,47 @@ export function BenefitBreakdown() {
           </Link>
         </h2>
         <p className="text-sm text-ink-soft">
-          Cada benefício pleiteado é um caso independente; a soma fecha os{" "}
-          {activeCasesTotal} casos ativos da carteira de demonstração; a
-          contagem de casos cadastrados aparece na tela de Casos.
+          Cada benefício pleiteado é um caso independente, e a soma fecha os{" "}
+          {total} casos ativos do escritório.
         </p>
       </header>
-      <dl className="flex flex-col gap-3">
-        {casesByBenefit.map((slice) => {
-          const sharePercent = Math.round(
-            (slice.count / activeCasesTotal) * 100,
-          );
-          return (
-            <div key={slice.id} className="flex flex-col gap-1.5">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <dt className="text-sm text-ink">{slice.label}</dt>
-                <dd className="flex items-baseline gap-2">
-                  <span className="text-sm font-bold text-ink">
-                    {slice.count}
-                  </span>
-                  <span className="text-xs font-semibold text-ink-soft">
-                    {sharePercent}%
-                  </span>
-                </dd>
-              </div>
-              <div
-                role="img"
-                aria-label={`${slice.label}: ${slice.count} casos, ${sharePercent} por cento da carteira`}
-                className="h-1.5 w-full overflow-hidden rounded-full bg-inset"
-              >
+      {total === 0 ? (
+        <p className="text-sm text-ink-soft">
+          Nenhum caso ativo cadastrado. A distribuição por benefício aparece
+          assim que o primeiro caso for aberto.
+        </p>
+      ) : (
+        <dl className="flex flex-col gap-3">
+          {slices.map((slice) => {
+            const sharePercent = Math.round((slice.count / total) * 100);
+            return (
+              <div key={slice.caseType} className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <dt className="text-sm text-ink">{slice.caseType}</dt>
+                  <dd className="flex items-baseline gap-2">
+                    <span className="text-sm font-bold text-ink">
+                      {slice.count}
+                    </span>
+                    <span className="text-xs font-semibold text-ink-soft">
+                      {sharePercent}%
+                    </span>
+                  </dd>
+                </div>
                 <div
-                  className="h-full rounded-full bg-brand-muted"
-                  style={{ width: `${sharePercent}%` }}
-                />
+                  role="img"
+                  aria-label={`${slice.caseType}: ${slice.count} casos, ${sharePercent} por cento da carteira`}
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-inset"
+                >
+                  <div
+                    className="h-full rounded-full bg-brand-muted"
+                    style={{ width: `${sharePercent}%` }}
+                  />
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </dl>
+            );
+          })}
+        </dl>
+      )}
     </section>
   );
 }

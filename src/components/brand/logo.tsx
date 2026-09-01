@@ -39,7 +39,7 @@ export function Logo({ withWordmark = true, markSize = 36 }: LogoProps) {
           <span className="text-xl font-bold tracking-tight text-ink">
             Advprev
           </span>
-          <span className="text-xl font-light text-brand">CRM</span>
+          <span className="text-xl font-light text-brand-text">CRM</span>
         </span>
       ) : null}
     </span>

@@ -1,6 +1,6 @@
 import { Timer } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { criticalDeadlines } from "@/lib/persona";
+import { criticalDeadlineList } from "@/lib/case-views";
 
 const statusPresentation = {
   calculated: {
@@ -13,7 +13,9 @@ const statusPresentation = {
   },
 } as const;
 
-export function CriticalDeadlines() {
+export async function CriticalDeadlines() {
+  const deadlines = await criticalDeadlineList();
+
   return (
     <section
       aria-label="Prazos críticos"
@@ -38,31 +40,40 @@ export function CriticalDeadlines() {
           </p>
         </div>
       </header>
-      <ul className="flex flex-col divide-y divide-line">
-        {criticalDeadlines.map((deadline) => {
-          const status = statusPresentation[deadline.status];
-          return (
-            <li
-              key={deadline.id}
-              className="flex flex-col gap-1.5 py-4 first:pt-0 last:pb-0"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-bold text-ink">{deadline.caseRef}</p>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap ${status.className}`}
-                >
-                  {status.label}
-                </span>
-              </div>
-              <p className="text-sm text-ink-soft">{deadline.client}</p>
-              <p className="text-sm text-ink-soft">{deadline.benefit}</p>
-              <p className="text-sm font-semibold text-ink">
-                {deadline.dueLabel}
-              </p>
-            </li>
-          );
-        })}
-      </ul>
+      {deadlines.length === 0 ? (
+        <p className="text-sm text-ink-soft">
+          Nenhum prazo próximo do vencimento. Os prazos nascem da intimação
+          publicada e aparecem aqui assim que forem registrados.
+        </p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {deadlines.map((deadline) => {
+            const status = statusPresentation[deadline.state];
+            return (
+              <li
+                key={deadline.id}
+                className="flex flex-col gap-1.5 py-4 first:pt-0 last:pb-0"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-bold text-ink">
+                    {deadline.caseRef}
+                  </p>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap ${status.className}`}
+                  >
+                    {status.label}
+                  </span>
+                </div>
+                <p className="text-sm text-ink-soft">{deadline.clientName}</p>
+                <p className="text-sm text-ink-soft">{deadline.label}</p>
+                <p className="text-sm font-semibold text-ink">
+                  Vence em {deadline.dueOn}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <p className="border-t border-line pt-4 text-xs text-ink-soft">
         O cálculo de prazos é apoio operacional. A confirmação é sempre um ato
         do advogado, registrado em auditoria.

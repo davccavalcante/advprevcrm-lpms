@@ -1,22 +1,73 @@
 import "server-only";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { ulid } from "ulid";
-import { parseAllDocuments, stringify } from "yaml";
-import { captureRoot } from "@/lib/capture/store";
+import { adminSupabase } from "@/lib/supabase/admin";
+import { serverSupabase } from "@/lib/supabase/server";
 import { PROJECT_VERSION } from "@/lib/trinity/project-identity";
 
 /*
- * Every execution of a scheduled capture leaves a record here, successful or
- * not, with the attempt, the reason of the failure and what it brought back.
+ * Every execution of a scheduled capture leaves a record in the office
+ * database, successful or not, with the attempt, the reason of the failure and
+ * what it brought back.
  *
- * This file is what the health panel reads. A capture that stopped silently is
+ * These rows are what the health panel reads. A capture that stopped silently is
  * how a deadline is missed, so the office has to see the date of the last
  * successful capture per source on the same day it fails, and not on the eve of
  * a deadline.
  */
 
-const RUNS_FILE = path.join(captureRoot(), "runs.yaml");
+/* A screen asks as the person signed in. The scheduled capture has nobody
+ * behind it, and only then does the office write with its own credential. */
+async function runsDb(): Promise<SupabaseClient> {
+  const supabase = await serverSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user ? (supabase as SupabaseClient) : adminSupabase();
+}
+
+type CaptureRunRow = {
+  id: string;
+  source: string;
+  started_at: string;
+  finished_at: string;
+  ok: boolean;
+  attempts: number;
+  query: string;
+  status: number | null;
+  reason: string | null;
+  found: number;
+  stored: number;
+  duplicates: number;
+  linked: number;
+  suggested: number;
+  unlinked: number;
+  project_version: string;
+};
+
+const RUN_COLUMNS =
+  "id, source, started_at, finished_at, ok, attempts, query, status, reason, found, stored, duplicates, linked, suggested, unlinked, project_version";
+
+function runOf(row: CaptureRunRow): CaptureRun {
+  return {
+    id: row.id,
+    source: row.source === "datajud" ? "datajud" : "djen",
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    ok: row.ok,
+    attempts: row.attempts,
+    query: row.query,
+    status: row.status,
+    reason: row.reason,
+    found: row.found,
+    stored: row.stored,
+    duplicates: row.duplicates,
+    linked: row.linked,
+    suggested: row.suggested,
+    unlinked: row.unlinked,
+    projectVersion: row.project_version,
+  };
+}
 
 export type CaptureSourceId = "djen" | "datajud";
 
@@ -49,25 +100,36 @@ export async function recordRun(
     projectVersion: PROJECT_VERSION,
     ...run,
   };
-  await mkdir(captureRoot(), { recursive: true });
-  await appendFile(
-    RUNS_FILE,
-    `---\n${stringify(full, { lineWidth: 0 })}`,
-    "utf8",
-  );
+  const supabase = await runsDb();
+  await supabase.from("capture_runs").insert({
+    id: full.id,
+    source: full.source,
+    started_at: full.startedAt,
+    finished_at: full.finishedAt,
+    ok: full.ok,
+    attempts: full.attempts,
+    query: full.query,
+    status: full.status,
+    reason: full.reason,
+    found: full.found,
+    stored: full.stored,
+    duplicates: full.duplicates,
+    linked: full.linked,
+    suggested: full.suggested,
+    unlinked: full.unlinked,
+    project_version: full.projectVersion,
+  });
   return full;
 }
 
 export async function listRuns(): Promise<CaptureRun[]> {
-  try {
-    const raw = await readFile(RUNS_FILE, "utf8");
-    return parseAllDocuments(raw)
-      .map((document) => document.toJS() as CaptureRun | null)
-      .filter((run): run is CaptureRun => Boolean(run?.id))
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-  } catch {
-    return [];
-  }
+  const supabase = await runsDb();
+  const { data } = await supabase
+    .from("capture_runs")
+    .select(RUN_COLUMNS)
+    .order("started_at", { ascending: false })
+    .returns<CaptureRunRow[]>();
+  return (data ?? []).map(runOf);
 }
 
 export type SourceHealth = {

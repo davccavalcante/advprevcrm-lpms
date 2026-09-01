@@ -88,7 +88,7 @@ export default async function AdministrativePage() {
           <CaseSliceList
             headingId="administrative-cases-heading"
             title="Casos em fase administrativa"
-            description="Recorte dos casos junto ao INSS, do requerimento à decisão, vindos do disco e da demonstração."
+            description="Recorte dos casos junto ao INSS, do requerimento à decisão, a partir dos registros do escritório."
             entries={casesInSlice(cases, "administrative")}
             emptyLabel="Nenhum caso em fase administrativa."
             missingDimension={(entry) =>

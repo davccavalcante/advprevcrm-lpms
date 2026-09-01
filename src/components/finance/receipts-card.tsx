@@ -19,7 +19,8 @@ export function ReceiptsCard() {
             Histórico de recebimentos
           </h2>
           <p className="text-sm text-ink-soft">
-            Somente a minha apuração; a soma fecha o recebido de agosto.
+            Somente a minha apuração, recebimento por recebimento, sempre
+            vinculada ao caso que o gerou.
           </p>
         </div>
       </header>

@@ -1,6 +1,6 @@
 import { Gavel, Stethoscope } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { weeklyAgenda } from "@/lib/persona";
+import { weekAppointments } from "@/lib/case-views";
 
 const kindPresentation = {
   hearing: {
@@ -13,7 +13,9 @@ const kindPresentation = {
   },
 } as const;
 
-export function WeeklyAgenda() {
+export async function WeeklyAgenda() {
+  const appointments = await weekAppointments();
+
   return (
     <section
       aria-label="Agenda da semana"
@@ -33,33 +35,42 @@ export function WeeklyAgenda() {
           Suas audiências e perícias, com preparação gerada como tarefa.
         </p>
       </header>
-      <ol className="flex flex-col divide-y divide-line">
-        {weeklyAgenda.map((entry) => {
-          const kind = kindPresentation[entry.kind];
-          return (
-            <li
-              key={entry.id}
-              className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0"
-            >
-              <span
-                aria-hidden
-                className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-inset text-ink"
+      {appointments.length === 0 ? (
+        <p className="text-sm text-ink-soft">
+          Nenhuma audiência ou perícia marcada para os próximos dias.
+        </p>
+      ) : (
+        <ol className="flex flex-col divide-y divide-line">
+          {appointments.map((entry) => {
+            const kind = kindPresentation[entry.kind];
+            return (
+              <li
+                key={entry.id}
+                className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0"
               >
-                <kind.Icon size={18} weight="bold" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-ink">
-                  {kind.label}, {entry.whenLabel}
-                </p>
-                <p className="text-sm text-ink-soft">
-                  {entry.caseRef}, {entry.client}
-                </p>
-                <p className="text-xs text-ink-soft">{entry.placeLabel}</p>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+                <span
+                  aria-hidden
+                  className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-inset text-ink"
+                >
+                  <kind.Icon size={18} weight="bold" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-ink">
+                    {kind.label}, {entry.date}
+                    {entry.time === null ? "" : `, ${entry.time}`}
+                  </p>
+                  <p className="text-sm text-ink-soft">
+                    {entry.caseRef}, {entry.clientName}
+                  </p>
+                  <p className="text-xs text-ink-soft">
+                    {entry.place ?? "Local não registrado no ato."}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </section>
   );
 }

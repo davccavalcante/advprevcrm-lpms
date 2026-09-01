@@ -37,6 +37,7 @@ const pageRoutes: { en: string; ptBr: string }[] = [
   { en: "/tasks", ptBr: "/tarefas" },
   { en: "/finance", ptBr: "/financeiro" },
   { en: "/settings", ptBr: "/configuracoes" },
+  { en: "/login", ptBr: "/entrar" },
 ];
 
 const apiRoutes: { en: string; ptBr: string }[] = [

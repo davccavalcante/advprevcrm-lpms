@@ -166,9 +166,15 @@ function writtenNumber(word: string): number | null {
 /*
  * The deadline in days. Ranked on purpose: an act says "no prazo de" when it
  * opens a deadline, and says "dias antes" when it is giving an instruction. The
- * office prefers the first shape and records every distinct value it saw, so an
- * act carrying two different deadlines is marked as ambiguous instead of being
- * silently resolved.
+ * office prefers the first shape and records every distinct value it saw.
+ *
+ * An act carrying two different deadlines resolves to no deadline at all, by
+ * the constitution of this office, item twelve, decided on 2026-08-12 and not
+ * revisitable: the machine never chooses between two possible deadlines,
+ * however good the heuristic looks. Measured on 2026-09-01: this function was
+ * returning the first candidate and marking the divergence only as residue, so
+ * the pipeline went on and computed a deadline the office had no right to
+ * compute. Both values are still reported in `candidates`, for the lawyer.
  */
 export function extractDays(text: string): {
   days: number | null;
@@ -281,11 +287,12 @@ export function extractDays(text: string): {
 
   const candidates = [...new Set(strongest.map((entry) => entry.days))];
   const best = strongest[0] ?? null;
+  const ambiguous = candidates.length > 1;
   return {
-    days: best?.days ?? null,
-    source: best?.excerpt ?? null,
+    days: ambiguous ? null : (best?.days ?? null),
+    source: ambiguous ? null : (best?.excerpt ?? null),
     candidates,
-    ambiguous: candidates.length > 1,
+    ambiguous,
     otherStartingEvent,
   };
 }

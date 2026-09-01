@@ -12,6 +12,11 @@
   --palette-cream: #fff7e8;
   --palette-gold: #cfa451;
   --palette-gold-muted: #bfb383;
+  /* The same gold, deepened until it reads as text on a light surface. Measured
+   * on 2026-09-01: the brand gold on white is 2.31 to one, below the three to
+   * one the standard requires even for large text; this one is 5.23 on white
+   * and 4.91 on the cream page. */
+  --palette-gold-deep: #8d6522;
   --palette-graphite: #484848;
   --palette-ink: #1a1a1a;
   --palette-navy: #1d1f37;
@@ -44,6 +49,9 @@
   /* Brand accents */
   --brand: var(--palette-gold);
   --brand-muted: var(--palette-gold-muted);
+  /* The brand as text over a light surface. The brand colour itself is a fill,
+   * not a text colour, and a wordmark is text. */
+  --brand-text: var(--palette-gold-deep);
   /*
    * Reads against the brand surface. The brand colour is the same gold in both
    * themes, so its contrast colour is the same navy in both themes; flipping it
@@ -192,6 +200,9 @@
 
   --brand: var(--palette-gold);
   --brand-muted: var(--palette-gold-muted);
+  /* Over the dark surfaces the brand gold reads at 6.97 to one, so the deep
+   * variant is not needed and would lose the brand. */
+  --brand-text: var(--palette-gold);
   --surface-panel-hover: color-mix(
     in srgb,
     var(--palette-navy) 74%,
@@ -249,6 +260,7 @@
   --color-ink-inverse-soft: var(--text-inverse-soft);
   --color-brand: var(--brand);
   --color-brand-muted: var(--brand-muted);
+  --color-brand-text: var(--brand-text);
   --color-brand-contrast: var(--brand-contrast);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);

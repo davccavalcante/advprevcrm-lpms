@@ -4,11 +4,57 @@ import { Logo } from "@/components/brand/logo";
 import { NavFilter } from "@/components/dashboard/dashboard-filter";
 import { NavAccount } from "@/components/dashboard/nav-account";
 import { navIconButtonClasses } from "@/components/dashboard/nav-action-styles";
-import { NavNotifications } from "@/components/dashboard/nav-notifications";
+import {
+  NavNotifications,
+  type NoticeGroup,
+} from "@/components/dashboard/nav-notifications";
 import { NavSearch } from "@/components/dashboard/nav-search";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { captureHealth } from "@/lib/capture/runs";
+import { criticalDeadlineList, searchIndex } from "@/lib/case-views";
 import { officeProfile } from "@/lib/office-profile";
 import { navigationItems } from "@/lib/persona";
+
+/*
+ * Every notice is a live reading of a record that already exists on a screen.
+ * Nothing is stored, nothing is marked as read, and the order goes from the
+ * failure that can hide a deadline to the deadline that is already counted.
+ * A group with nothing in it does not appear, because an empty heading in a
+ * panel of warnings is noise that teaches the office to stop reading it.
+ */
+async function noticeGroups(): Promise<NoticeGroup[]> {
+  const [health, deadlines] = await Promise.all([
+    captureHealth(),
+    criticalDeadlineList(),
+  ]);
+
+  return [
+    {
+      id: "captures",
+      heading: "Captura externa",
+      items: health
+        .filter((source) => !source.healthy)
+        .map((source) => ({
+          id: source.source,
+          title: `${source.label}, ${source.statusLabel.toLowerCase()}`,
+          detail: `${source.lastSuccessAt === null ? "Sem captura bem sucedida registrada" : `Última captura bem sucedida em ${source.lastSuccessAt}`}. ${source.role}`,
+          href: "/judicial",
+          destinationLabel: "Judicial",
+        })),
+    },
+    {
+      id: "deadlines",
+      heading: "Prazos críticos",
+      items: deadlines.map((deadline) => ({
+        id: deadline.id,
+        title: `${deadline.caseRef}, vence em ${deadline.dueOn}`,
+        detail: `${deadline.clientName}. ${deadline.label}. Estado ${deadline.state === "confirmed" ? "confirmado" : "calculado"}.`,
+        href: deadline.href,
+        destinationLabel: "ficha do caso",
+      })),
+    },
+  ].filter((group) => group.items.length > 0);
+}
 
 /* Same rule as the circular controls: 44 pixels tall under a finger, 40 under a
  * pointer, so the strip stays compact on the desktop it was designed for. */
@@ -23,6 +69,8 @@ export async function TopNav({
   activeId?: string;
 }) {
   const profile = await officeProfile();
+  const index = await searchIndex();
+  const notices = await noticeGroups();
   return (
     <header className="flex w-full flex-wrap items-center gap-x-4 gap-y-3 px-6 py-5 lg:px-10">
       <Link
@@ -65,10 +113,10 @@ export async function TopNav({
         </ul>
       </nav>
       <div className="ml-auto flex items-center gap-2 xl:ml-0">
-        <NavSearch />
+        <NavSearch index={index} />
         {activeId === "dashboard" ? <NavFilter /> : null}
         <ThemeToggle />
-        <NavNotifications />
+        <NavNotifications groups={notices} />
         <Link
           href="/configuracoes"
           aria-label="Configurações"

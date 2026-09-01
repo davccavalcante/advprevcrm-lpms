@@ -1,4 +1,139 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/*
+ * The scope resolution of the reading layer is a rule, not a report, so it is
+ * exercised against a controlled set of cases instead of against whatever the
+ * office happens to hold. Before the store moved to the database the suite read
+ * the demonstration fixture, which made the rule pass because of a seed; the
+ * office is empty now and the rule has to hold on its own, so the cases arrive
+ * from here and every assertion below is about the policy and nothing else.
+ */
+vi.mock("@/lib/case-views", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/case-views")>();
+  const base = {
+    origin: "stored" as const,
+    sphere: "federal-social-security" as const,
+    sphereLabel: "Federal previdenciário",
+    courtLabel: "Justiça Federal",
+    caseType: "Aposentadoria por idade urbana",
+    opposingParty: "INSS",
+    status: "administrative" as const,
+    statusLabel: "Administrativo",
+    documentCount: 0,
+    documentNames: [] as string[],
+    openDeadlines: 0,
+    agendaCount: 0,
+    financeCount: 0,
+    intakePending: false,
+    intakeReason: null,
+  };
+  return {
+    ...actual,
+    listUnifiedCases: async () => [
+      {
+        ...base,
+        key: "test:1",
+        caseRef: "TESTE-0001",
+        clientId: "01TESTCLIENT0000000000001",
+        clientName: "Cliente de teste um",
+        responsibleLawyer: "Mendelsson Sandrini Alves Maciel",
+        href: "/casos/01TESTCLIENT0000000000001/01TESTCASE00000000000001",
+      },
+      {
+        ...base,
+        key: "test:2",
+        caseRef: "TESTE-0002",
+        clientId: "01TESTCLIENT0000000000002",
+        clientName: "Cliente de teste dois",
+        responsibleLawyer: "Outra advogada do escritório",
+        href: "/casos/01TESTCLIENT0000000000002/01TESTCASE00000000000002",
+      },
+    ],
+  };
+});
+
+/*
+ * The reading layer now opens the records themselves, case by case, with the
+ * deadlines, the tasks, the appointments, the documents and the captured acts.
+ * None of that may be opened by a test, which runs without a database, so the
+ * records arrive from here and every assertion stays about the policy.
+ */
+vi.mock("@/lib/records-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/records-store")>();
+  return {
+    ...actual,
+    listAllCases: async () => [],
+    listClients: async () => [],
+  };
+});
+
+vi.mock("@/lib/capture/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/capture/store")>();
+  return { ...actual, listCommunications: async () => [] };
+});
+
+vi.mock("@/lib/capture/runs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/capture/runs")>();
+  return { ...actual, captureHealth: async () => [] };
+});
+
+/*
+ * The reading layer also names how many acts the capture brought in on each of
+ * the last days. That is a query against the office database, which no test may
+ * open, so the days arrive from here and the assertions below stay about the
+ * policy and never about a capture that did or did not happen.
+ */
+vi.mock("@/lib/capture/board-data", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/capture/board-data")>();
+  return {
+    ...actual,
+    dailyPublications: async () => [
+      { day: "1", publications: 0 },
+      { day: "2", publications: 0 },
+    ],
+  };
+});
+
+/*
+ * The financial suppression is a rule as well, and the office holds no finance
+ * record of its own yet, so the lines it separates arrive from here. Two
+ * contracts of one lawyer are enough: the administrator has to see both, and a
+ * lawyer who is not the one they are attributable to has to see neither and be
+ * told how many were withheld.
+ */
+vi.mock("@/lib/persona", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/persona")>();
+  const base = {
+    clientAvatarSrc: "",
+    benefit: "Aposentadoria por idade urbana",
+    href: "/financeiro",
+    destinationLabel: "Financeiro",
+    responsibleLawyer: "Mendelsson Sandrini Alves Maciel",
+  };
+  return {
+    ...actual,
+    feeContracts: [
+      {
+        ...base,
+        id: "01TESTCONTRACT0000000001",
+        caseRef: "TESTE-0001",
+        client: "Cliente de teste um",
+        contractLabel: "Contrato de honorários de teste um",
+        participationLabel: "Participação de teste um",
+      },
+      {
+        ...base,
+        id: "01TESTCONTRACT0000000002",
+        caseRef: "TESTE-0002",
+        client: "Cliente de teste dois",
+        contractLabel: "Contrato de honorários de teste dois",
+        participationLabel: "Participação de teste dois",
+      },
+    ],
+  };
+});
+
 import { parseAnswer, parseInline } from "@/lib/answer-format";
 import {
   extractAct,
@@ -24,8 +159,10 @@ import {
 } from "@/lib/trinity/live-search";
 import {
   type AllowedView,
+  contextBlock,
   type LawyerSession,
   NOW_LINE_PREFIX,
+  questionNeedsOfficeRecords,
   resolveAllowedView,
 } from "@/lib/trinity/office-context";
 import {
@@ -111,6 +248,96 @@ describe("Reading layer, scope resolution", () => {
     const view = await resolveAllowedView(self);
     expect(view.finance.length).toBe(admin.finance.length);
     expect(view.suppressed.financialLines).toBe(0);
+  });
+});
+
+/*
+ * What a question needs before anything is opened. This rule decides whether
+ * the entity reads the office at all, so it is the rule that would make it
+ * answer without data if it were wrong, and it is deliberately conservative: it
+ * only skips the reading for a short opener that names nothing the office
+ * keeps. Ordered by the director on 2026-09-01, after a greeting was costing a
+ * full reading of the office and the panel was saying the entity was reading
+ * records it had no reason to open.
+ */
+describe("What a question needs before anything is opened", () => {
+  it("opens nothing for a greeting, a thank you or a question about the entity", () => {
+    for (const question of [
+      "OI",
+      "oi",
+      "Olá",
+      "Bom dia",
+      "Boa tarde",
+      "Boa noite",
+      "Tudo bem?",
+      "Obrigado",
+      "Valeu",
+      "Ok",
+      "Tchau",
+      "Quem é você?",
+      "Qual é o seu nome?",
+      "O que você faz?",
+      "Você é um robô?",
+      "Se apresente",
+    ]) {
+      expect(questionNeedsOfficeRecords(question)).toBe(false);
+    }
+  });
+
+  it("opens the records whenever the question names something the office keeps", () => {
+    for (const question of [
+      "Quantos casos temos?",
+      "Bom dia, quantos prazos vencem hoje?",
+      "Oi, tem documento pendente?",
+      "Quem é o cliente do processo?",
+      "Obrigado, mas e a intimação?",
+      "Qual é o meu honorário?",
+      "A captura rodou?",
+      "O que o INSS decidiu?",
+      "Quem pode confirmar um prazo?",
+      "Quais tarefas estão abertas?",
+    ]) {
+      expect(questionNeedsOfficeRecords(question)).toBe(true);
+    }
+  });
+
+  it("opens the records for anything that is not a short opener", () => {
+    expect(
+      questionNeedsOfficeRecords(
+        "Me explique com detalhes tudo o que este sistema faz e como ele organiza o trabalho do escritório todos os dias",
+      ),
+    ).toBe(true);
+    expect(
+      questionNeedsOfficeRecords("Qual é o valor do salário mínimo?"),
+    ).toBe(true);
+    expect(questionNeedsOfficeRecords("asdkjhasd")).toBe(true);
+  });
+
+  it("opens nothing for an empty question", () => {
+    expect(questionNeedsOfficeRecords("   ")).toBe(false);
+  });
+});
+
+/*
+ * The reading the entity receives is the office and never the page. The screen
+ * left the context by the director's order of 2026-09-01, after the answers
+ * came back framed by the panel the lawyer happened to be looking at.
+ */
+describe("The reading carries the office, never the screen", () => {
+  it("never names a screen in the assembled context", async () => {
+    const view = await resolveAllowedView(ADMIN);
+    const block = contextBlock(view);
+    expect(block).not.toMatch(/Tela em que o advogado está/);
+    expect(block).toContain("Você recebe o escritório inteiro");
+  });
+
+  it("carries the rules of the office, which no record can teach", async () => {
+    const view = await resolveAllowedView(ADMIN);
+    const block = contextBlock(view);
+    expect(block).toContain("COMO ESTE ESCRITÓRIO FUNCIONA");
+    expect(block).toContain("row level security");
+    expect(block).toContain("calculado e confirmado");
+    expect(block).toContain("631.240");
   });
 });
 
@@ -441,10 +668,9 @@ describe("Answer cache, sameness of a question", () => {
     );
   });
 
-  it("separates lawyer, screen and question in the key", () => {
+  it("separates lawyer, records and question in the key, never the screen", () => {
     const base = {
       question: "quantos casos estão em andamento",
-      screen: "Casos",
       lawyerId: "mendelsson",
       contextFingerprint: "abc",
       model: "modelo-de-teste",
@@ -453,10 +679,13 @@ describe("Answer cache, sameness of a question", () => {
       cacheKey({ ...base, question: "Quantos casos estão em andamento?" }),
     );
     expect(cacheKey(base)).not.toBe(cacheKey({ ...base, lawyerId: "outra" }));
-    expect(cacheKey(base)).not.toBe(cacheKey({ ...base, screen: "Painel" }));
     expect(cacheKey(base)).not.toBe(
       cacheKey({ ...base, contextFingerprint: "def" }),
     );
+    /* The screen is not part of the key by the director's order of 2026-09-01:
+     * the entity reads the office and not the page, so the same question asked
+     * from two screens is the same question and is paid for once. */
+    expect(Object.keys(base)).not.toContain("screen");
   });
 
   it("never serves the hour from disk, and serves the day", () => {
@@ -642,12 +871,17 @@ describe("Reading an act by rule", () => {
     );
   });
 
-  it("marks as ambiguous an act carrying two different deadlines", () => {
+  it("marks as ambiguous an act carrying two different deadlines, and computes neither", () => {
     const act = extractAct({
       text: "manifestação no prazo de 15 (quinze) dias e resposta no prazo de 30 dias",
       documentType: null,
     });
     expect(act.residue.join(" ")).toContain("divergentes");
+    /* Constitution, item twelve, not revisitable: the machine never chooses
+     * between two possible deadlines. The act goes to a human and no deadline
+     * is calculated, however good the heuristic looks. */
+    expect(act.days).toBeNull();
+    expect(act.fullyDeterministic).toBe(false);
   });
 
   it("does not take an instruction as a deadline", () => {

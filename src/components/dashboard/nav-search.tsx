@@ -8,7 +8,7 @@ import {
   navIconButtonClasses,
   navPanelClasses,
 } from "@/components/dashboard/nav-action-styles";
-import { judicialLawsuits, personaClients } from "@/lib/persona";
+import type { SearchEntry } from "@/lib/case-views";
 
 /*
  * The list is capped so the panel never turns into an endless scroll, and the
@@ -17,18 +17,8 @@ import { judicialLawsuits, personaClients } from "@/lib/persona";
  */
 const RESULT_LIMIT = 8;
 
-type SearchEntry = {
-  id: string;
-  kindLabel: string;
-  title: string;
-  detail: string;
-  haystack: string;
-  href: string;
-  destinationLabel: string;
-};
-
-/* Accent and punctuation insensitive: the operator types "jose" or a bare
- * sequence of digits, the record says "José" and "5004231-88.2023.4.03.6100". */
+/* The same normalisation the index was built with, applied to what the operator
+ * types: accent and punctuation insensitive on both sides or neither. */
 function normalize(value: string): string {
   return value
     .normalize("NFD")
@@ -36,71 +26,11 @@ function normalize(value: string): string {
     .toLowerCase();
 }
 
-function haystackOf(parts: string[]): string {
-  const text = normalize(parts.filter(Boolean).join(" "));
-  return `${text} ${text.replace(/\D/g, "")}`;
-}
-
-function buildIndex(): SearchEntry[] {
-  const entries: SearchEntry[] = [];
-
-  for (const client of personaClients) {
-    entries.push({
-      id: `client-${client.id}`,
-      kindLabel: "Cliente",
-      title: client.fullName,
-      detail: `${client.cpf}, ${client.cases.length === 1 ? "1 caso" : `${client.cases.length} casos`}`,
-      haystack: haystackOf([client.fullName, client.cpf, client.nit]),
-      href: `/clientes/${client.id}`,
-      destinationLabel: "ficha do cliente",
-    });
-
-    for (const item of client.cases) {
-      entries.push({
-        id: `case-${client.id}-${item.caseRef}`,
-        kindLabel: "Caso",
-        title: item.caseRef,
-        detail: `${client.fullName}, ${item.benefit}`,
-        haystack: haystackOf([
-          item.caseRef,
-          client.fullName,
-          item.benefit,
-          item.benefitNumber ?? "",
-          item.lawsuitNumber ?? "",
-        ]),
-        href: item.href,
-        destinationLabel: item.destinationLabel,
-      });
-    }
-  }
-
-  for (const lawsuit of judicialLawsuits) {
-    entries.push({
-      id: `lawsuit-${lawsuit.id}`,
-      kindLabel: "Processo",
-      title: lawsuit.lawsuitNumber,
-      detail: `${lawsuit.client}, ${lawsuit.courtLabel}`,
-      haystack: haystackOf([
-        lawsuit.lawsuitNumber,
-        lawsuit.client,
-        lawsuit.caseRef,
-        lawsuit.courtLabel,
-        lawsuit.benefit,
-      ]),
-      href: `/judicial/${lawsuit.id}`,
-      destinationLabel: "Judicial",
-    });
-  }
-
-  return entries;
-}
-
-export function NavSearch() {
+export function NavSearch({ index }: { index: SearchEntry[] }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const index = useMemo(buildIndex, []);
   const counts = useMemo(
     () => ({
       clients: index.filter((entry) => entry.kindLabel === "Cliente").length,

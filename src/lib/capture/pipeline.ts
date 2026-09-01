@@ -224,10 +224,19 @@ export function applyCommunication(input: {
     notice,
     reminder,
     task,
-    note:
+    /* What the rule could not decide is named, never left implicit. An act that
+     * carries two divergent deadlines produces none, by the constitution, and
+     * the lawyer has to read here that this is why. */
+    note: [
       produced.length === 0
         ? "Nenhuma obrigação processual foi reconhecida por regra neste ato. A comunicação fica registrada íntegra e o advogado decide."
         : `Gerados: ${produced.join(", ")}.`,
+      extraction.residue.length === 0
+        ? null
+        : `Para decisão do advogado: ${extraction.residue.join("; ")}.`,
+    ]
+      .filter((part) => part !== null)
+      .join(" "),
   };
 }
 

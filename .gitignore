@@ -44,6 +44,17 @@ yarn-error.log*
 .creator
 .env.backup-*
 
+# The method law and the working memory of this office. By the director's order
+# of 2026-09-01 these never reach the public repository: the preamble carries
+# the server, the monitored registration and the operating rules; the handoff
+# carries the measured state of the office; the agent files carry the playbook;
+# and .claude carries the operational rules and the local settings.
+/.claude/
+/PREAMBLE.md
+/HANDOFF.md
+/AGENTS.md
+/CLAUDE.md
+
 # Personal and sensitive personal data. assets/ holds real client documents used
 # to exercise the upload interface, including identity, employment and health
 # records; data/ holds everything the application writes about a client and a

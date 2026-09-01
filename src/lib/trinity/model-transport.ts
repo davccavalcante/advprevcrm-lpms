@@ -9,7 +9,7 @@ import {
   type ModelchainRouter,
   type ModelDefinition,
 } from "@takk/modelchain";
-import { anthropicModel, geminiModel } from "@takk/modelchain/providers";
+import { anthropicModel, httpModel } from "@takk/modelchain/providers";
 import type {
   ChatMessage,
   GenerateRequest,
@@ -64,6 +64,127 @@ function maxTokensFor(provider: TransportProvider, requested: number): number {
     return configured;
   }
   return Math.max(requested, GEMINI_REASONING_FLOOR);
+}
+
+/*
+ * The office builds its own Gemini model over the documented HTTP extension
+ * point of modelchain instead of the shipped Gemini factory, for one measured
+ * reason: the Gemini 3 family reasons before it writes, the shipped factory has
+ * no way to say how much, and the reasoning is what made this surface slow.
+ *
+ * Measured on 2026-09-01 against the running service, same key, same prompt of
+ * about one thousand two hundred tokens: with the default reasoning the answer
+ * to "Bom dia" took 3.0, 3.8 and 13.3 seconds and spent between two hundred and
+ * three hundred and twenty thinking tokens; with the reasoning at its minimum
+ * the same answer took 1.3 seconds and spent none. The level is configuration,
+ * `GEMINI_THINKING_LEVEL`, so the office can raise it when it wants depth and
+ * pay for it knowingly.
+ *
+ * The thinking tokens are counted as output, because the provider charges them
+ * as output and a ledger that hides them under-reports what the office paid.
+ */
+function geminiBaseUrl(): string {
+  return (
+    process.env.GEMINI_BASE_URL?.trim() ||
+    "https://generativelanguage.googleapis.com/v1beta"
+  );
+}
+
+function geminiThinkingLevel(): string {
+  return process.env.GEMINI_THINKING_LEVEL?.trim() || "minimal";
+}
+
+/*
+ * How long one model may take before the office gives up on it and tries the
+ * next one. Measured on 2026-09-01 with the keys of the office throttled: a
+ * question could sit for thirty seconds while the pool rotated over keys that
+ * were answering 429, and the lawyer had no answer and no explanation. A
+ * deadline turns that into a bounded wait followed by the next model.
+ */
+function modelDeadlineMs(): number {
+  const raw = Number.parseInt(
+    process.env.IM_MODEL_DEADLINE_MS?.trim() ?? "",
+    10,
+  );
+  return Number.isFinite(raw) && raw > 0 ? raw : 20_000;
+}
+
+type GeminiPart = { text?: string };
+type GeminiCandidate = {
+  content?: { parts?: GeminiPart[] };
+  finishReason?: string;
+};
+type GeminiPayload = {
+  candidates?: GeminiCandidate[];
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
+    totalTokenCount?: number;
+  };
+};
+
+function geminiOfficeModel(
+  modelId: string,
+  options: {
+    cost: { costPer1kInput: number; costPer1kOutput: number };
+    keys: () => string;
+    capabilities: string[];
+  },
+): ModelDefinition {
+  const level = geminiThinkingLevel();
+  return httpModel(modelId, {
+    cost: options.cost,
+    keys: options.keys,
+    baseUrl: geminiBaseUrl(),
+    capabilities: options.capabilities,
+    authHeader: (key) => ({ "x-goog-api-key": key }),
+    buildRequest: (request, id) => ({
+      path: `/models/${encodeURIComponent(id)}:generateContent`,
+      headers: { "Content-Type": "application/json" },
+      body: {
+        contents: [{ role: "user", parts: [{ text: request.prompt }] }],
+        ...(request.system
+          ? { systemInstruction: { parts: [{ text: request.system }] } }
+          : {}),
+        generationConfig: {
+          ...(request.maxTokens === undefined
+            ? {}
+            : { maxOutputTokens: request.maxTokens }),
+          ...(request.temperature === undefined
+            ? {}
+            : { temperature: request.temperature }),
+          ...(request.stopSequences && request.stopSequences.length > 0
+            ? { stopSequences: [...request.stopSequences] }
+            : {}),
+          ...(level === "default"
+            ? {}
+            : { thinkingConfig: { thinkingLevel: level } }),
+        },
+      },
+    }),
+    parseResponse: (json) => {
+      const payload = json as GeminiPayload;
+      const candidate = payload.candidates?.[0];
+      const text = (candidate?.content?.parts ?? [])
+        .map((part) => part.text ?? "")
+        .join("");
+      const usage = payload.usageMetadata ?? {};
+      const thoughts = usage.thoughtsTokenCount ?? 0;
+      return {
+        text,
+        finishReason:
+          candidate?.finishReason === "MAX_TOKENS" ? "length" : "stop",
+        inputTokens: usage.promptTokenCount ?? 0,
+        outputTokens: (usage.candidatesTokenCount ?? 0) + thoughts,
+        totalTokens:
+          usage.totalTokenCount ??
+          (usage.promptTokenCount ?? 0) +
+            (usage.candidatesTokenCount ?? 0) +
+            thoughts,
+      };
+    },
+  });
 }
 
 /* Where the routing posterior survives a restart, next to the other records
@@ -337,13 +458,13 @@ function buildState(): TransportState {
       );
     } else {
       definitions.push(
-        geminiModel(model.modelId, {
+        geminiOfficeModel(model.modelId, {
           cost: {
             costPer1kInput: pricePer1k("IM_PRICE_GEMINI_INPUT_PER_MTOK"),
             costPer1kOutput: pricePer1k("IM_PRICE_GEMINI_OUTPUT_PER_MTOK"),
           },
           keys: () => keySlot.gemini,
-          capabilities: ["streaming"],
+          capabilities: [],
         }),
       );
     }
@@ -487,6 +608,7 @@ export class ModelTransportAdapter implements LlmAdapter {
               req.maxOutputTokens ?? this.maxOutputTokens,
             ),
             metadata: { agent: OFFICE_AGENT_ID },
+            signal: AbortSignal.timeout(modelDeadlineMs()),
           });
         });
       try {

@@ -492,13 +492,15 @@ jobs:
             # The port has to be answered by what this deploy just started.
             # Without this, the public health check could read a status from a
             # process that was never replaced, and a deploy that shipped nothing
-            # would pass. The panel answers 200 without a session by design in
-            # this phase, because no authentication module exists yet.
+            # would pass. The probe is the sign in screen and not the root,
+            # because since the authenticated door of 2026-09-01 the root
+            # refuses a browser without a session and answers a redirect, so a
+            # root that answered 200 would now mean the door had been removed.
             echo "Waiting for the application on 127.0.0.1:${APP_PORT}"
             deadline=$(( $(date +%s) + 120 ))
             code="000"
             while [ "$(date +%s)" -lt "${deadline}" ]; do
-              code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/" 2>/dev/null || true)"
+              code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${APP_PORT}/entrar" 2>/dev/null || true)"
               code="${code:-000}"
               [ "${code}" = "200" ] && break
               sleep 3
@@ -509,7 +511,7 @@ jobs:
               pm2 logs "${APP_NAME}" --lines 60 --nostream || true
               exit 1
             fi
-            echo "Loopback answered 200"
+            echo "Loopback answered 200 on the sign in screen"
 
             # Advisory report of the configuration, by name only and never by
             # value: which documented variables of .env.example are absent from
@@ -539,23 +541,26 @@ jobs:
           set -euo pipefail
 
           probe() {
-            local path="$1" deadline code
+            local path="$1" expected="$2" deadline code
             deadline=$(( $(date +%s) + 120 ))
             code="000"
             while [ "$(date +%s)" -lt "${deadline}" ]; do
               code="$(curl -s -o /dev/null -w '%{http_code}' "${SITE_URL}${path}" 2>/dev/null || true)"
               code="${code:-000}"
-              [ "${code}" = "200" ] && break
+              [ "${code}" = "${expected}" ] && break
               sleep 6
             done
-            echo "GET ${path} -> ${code}"
-            [ "${code}" = "200" ]
+            echo "GET ${path} -> ${code}, expected ${expected}"
+            [ "${code}" = "${expected}" ]
           }
 
-          # The panel at the root, and one pt-BR URL, because the whole product
-          # speaks Brazilian Portuguese through rewrites and a deploy that lost
-          # next.config.ts would serve the root and break every screen the
-          # lawyers actually open.
-          probe "/"
-          probe "/tarefas"
+          # Three proofs, and the expected status is part of each one. The root
+          # has to redirect, because an office that answered its panel to a
+          # browser without a session would have lost its door. The sign in
+          # screen has to render, which is the pt-BR rewrite of next.config.ts
+          # working through the edge. An interior pt-BR URL has to redirect
+          # too, which is the middleware refusing before any query runs.
+          probe "/" "307"
+          probe "/entrar" "200"
+          probe "/tarefas" "307"
           echo "Health check passed"

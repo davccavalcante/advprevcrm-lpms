@@ -1,9 +1,15 @@
 import { WarningDiamond } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
-import { overdueDeadlines, riskAlerts } from "@/lib/persona";
+import { criticalDeadlineList } from "@/lib/case-views";
+import { riskAlerts } from "@/lib/persona";
 
-export function RiskAlerts() {
+export async function RiskAlerts() {
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = (await criticalDeadlineList()).filter(
+    (deadline) => deadline.dueOn < today,
+  );
+
   return (
     <section
       aria-label="Prazos vencidos e alertas de risco"
@@ -32,9 +38,13 @@ export function RiskAlerts() {
       <div className="flex flex-col gap-2 rounded-md border border-line bg-inset p-4">
         <p className="text-sm font-medium text-ink-soft">Prazos vencidos</p>
         <p className="text-4xl font-bold tracking-tight text-ink">
-          {overdueDeadlines.count}
+          {overdue.length}
         </p>
-        <p className="text-xs text-ink-soft">{overdueDeadlines.scopeLabel}</p>
+        <p className="text-xs text-ink-soft">
+          {overdue.length === 0
+            ? "Nenhum prazo registrado passou da data de vencimento."
+            : "Prazos registrados cuja data de vencimento já passou."}
+        </p>
       </div>
 
       <ul className="flex flex-col divide-y divide-line">

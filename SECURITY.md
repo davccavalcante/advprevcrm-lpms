@@ -14,7 +14,7 @@ Include in the report: a description of the issue, steps to reproduce, the poten
 
 ## Scope
 
-This repository and its deployment artifacts. The system's security posture is defined in `PREAMBLE.md`, `PRIVACY.md`, and `INFO.md` section 10: minimum necessary access enforced in the database through row level security, encryption in transit and at rest, segregation of sensitive documents, immutable audit trail, secrets exclusively in environment variables, and periodic backups with tested restoration.
+This repository and its deployment artifacts. The system's security posture is defined in `PRIVACY.md` and `INFO.md` section 10: minimum necessary access enforced in the database through row level security, encryption in transit and at rest, segregation of sensitive documents, immutable audit trail, secrets exclusively in environment variables, and periodic backups with tested restoration.
 
 ## Out of bounds
 

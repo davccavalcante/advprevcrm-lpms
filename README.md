@@ -6,12 +6,12 @@ Internal management system for a Brazilian social security law firm, developed b
 [![license](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](./LICENSE)
 [![version](https://img.shields.io/badge/version-1.0.0--canary-blueviolet)](./CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A522.13-success)]()
-[![tests](https://img.shields.io/badge/tests-86%20passing-brightgreen)]()
-[![pages](https://img.shields.io/badge/pages-17-blue)]()
+[![tests](https://img.shields.io/badge/tests-92%20passing-brightgreen)]()
+[![pages](https://img.shields.io/badge/pages-18-blue)]()
 
 ## Status
 
-Version `1.0.0-canary`, which is the version of everything this project declares about itself: the manifest, the body of the non-human entity, and every record the system writes. Front-end and interface phase, with the intelligence layer fully wired, all thirty one `@takk/*` and `@teleologyhi-sdk/*` packages integrated, and the capture of publications working against the official source as a durable execution. Measured on 2026-08-21: one hundred and thirty eight TypeScript files and about twenty seven thousand two hundred lines under `src/`, seventeen pages, three route handlers, five server action modules, and the full gate green (`tsc` 0 errors, `biome check` 0 errors on 151 files, 86 tests passing, build generating 17 pages). The account profile, name, electronic address, password and photo, is editable on the settings screen with an append-only change log. Every URL of the product is Brazilian Portuguese, served by rewrites over English route folders, with English page URLs redirecting to the pt-BR form. The entity researches the world outside the records in real time through Exa and Tavily, server-side, with minimized queries and cited sources, never as a deadline source. Persistence in this phase is local file under `data/`, with no database. `HANDOFF.md` consolidates the state and separates what was proved against live data from what was proved only by construction. The complete functional and technical specification lives in `INFO.md` (the product's normative document).
+Version `1.0.0-canary`, which is the version of everything this project declares about itself: the manifest, the body of the non-human entity, and every record the system writes. The office has a database, an authenticated door and no invented data. Measured on 2026-09-01: one hundred and forty nine TypeScript files and twenty seven thousand nine hundred and seventy eight lines under `src/`, eighteen pages, three route handlers, six server action modules, and the full gate green (`tsc` 0 errors, `biome check` 0 errors on 156 files, 92 tests passing, build producing 22 routes). Supabase carries the whole domain in South America, São Paulo, with fourteen tables, row level security on every one of them, twenty nine policies and two private buckets, versioned in `supabase/migrations/0001_initial_schema.sql`; the middleware refuses an unauthenticated browser before it reaches a query and the single account of the office signs in at `/entrar`. Every act of the office appends an immutable audit row and every reading of a document appends to its own trail. The intelligence layer is fully wired, all thirty one `@takk/*` and `@teleologyhi-sdk/*` packages are integrated, and the capture of publications runs as a durable execution against the official source, writing its result to the database. Every URL of the product is Brazilian Portuguese, served by rewrites over English route folders, with English page URLs redirecting to the pt-BR form. The entity reads the office and never the screen the lawyer is on: the assembled reading carries clients, cases, deadlines with their whole chain, tasks, appointments, reminders, documents with measured confidence, notices, captured communications and the rules of the office itself. A courtesy question opens no record, the reasoning of the model is bounded by configuration, and the median answer is about two seconds. The entity also researches the world outside the records in real time through Exa and Tavily, server-side, with minimized queries and cited sources, never as a deadline source. Production is live at `https://advprevcrm.tech`, published by the manual deploy workflow on this date, with the door proved through the public address: the root redirects a browser without a session, the sign in screen answers, and an interior URL redirects. The complete functional and technical specification lives in `INFO.md` (the product's normative document).
 
 ## What it is
 
@@ -36,17 +36,15 @@ Next.js (App Router), TypeScript at maximum strictness, React, Tailwind CSS, Rad
 | Document | Purpose |
 |---|---|
 | `INFO.md` | Complete functional and technical specification, the product law |
-| `PREAMBLE.md` | Method law: discipline, workflow, and prohibitions |
-| `CLAUDE.md` | Guidance for Claude Code working in this repository |
-| `AGENTS.md` | Mirror and playbook for coding agents |
 | `SYSTEM_OVERVIEW.md` | High-level architecture overview |
 | `SPEC.md` | Contracts and data model, derived from `INFO.md` |
-| `HANDOFF.md` | State of the system, with live evidence separated from constructed evidence |
 | `AUDIT.md` | Living audit of project decisions and findings |
 | `TASK.md` | Task registry |
 | `CHANGELOG.md` | Public change history |
 | `PRIVACY.md` | Data protection baseline (LGPD) |
 | `SECURITY.md` | Security policy and vulnerability reporting |
+
+The method law of the office and its working memory are internal and are not published: the discipline and prohibitions the office works under, the playbook of the agent, and the state document that separates what was proved against live data from what was proved only by construction. They name the server, the monitored registration and the operating rules of a real law firm, so they stay with the office.
 
 ## Community & support
 

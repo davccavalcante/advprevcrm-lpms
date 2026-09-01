@@ -1,9 +1,7 @@
-import { appendFile, mkdir } from "node:fs/promises";
-import path from "node:path";
+import "server-only";
 import { ulid } from "ulid";
-import { stringify } from "yaml";
+import { serverSupabase } from "@/lib/supabase/server";
 import { PROJECT_VERSION } from "@/lib/trinity/project-identity";
-import { TRINITY_ROOT } from "@/lib/trinity/store-paths";
 
 /*
  * Who touched which document, when, and from where.
@@ -11,8 +9,9 @@ import { TRINITY_ROOT } from "@/lib/trinity/store-paths";
  * In this field a document carries sensitive personal data of health, so every
  * reading of one is an event that has to be traceable: the entity reading a
  * passage to answer a lawyer, a preview opened on a screen, a download taken to
- * a computer. The file is append only, one YAML document per event, and the
- * application never edits or deletes a line of it.
+ * a computer. The rows live in the office database, only the administration
+ * reads them, and the application holds no privilege to update or delete one,
+ * which is what makes the trail a trail.
  */
 
 export type DocumentAccessAction =
@@ -37,22 +36,23 @@ export type DocumentAccessEvent = {
   projectVersion: string;
 };
 
-const ACCESS_DIR = path.join(TRINITY_ROOT, "access");
-const ACCESS_FILE = path.join(ACCESS_DIR, "document-access.yaml");
-
 export async function recordDocumentAccess(
   event: Omit<DocumentAccessEvent, "id" | "at" | "projectVersion">,
 ): Promise<void> {
-  const full: DocumentAccessEvent = {
+  const supabase = await serverSupabase();
+  await supabase.from("document_access_events").insert({
     id: ulid(),
     at: new Date().toISOString(),
-    projectVersion: PROJECT_VERSION,
-    ...event,
-  };
-  await mkdir(ACCESS_DIR, { recursive: true });
-  await appendFile(
-    ACCESS_FILE,
-    `---\n${stringify(full, { lineWidth: 0 })}`,
-    "utf8",
-  );
+    actor: event.actor,
+    actor_role: event.role,
+    action: event.action,
+    document_id: event.documentId,
+    file_name: event.fileName,
+    client_id: event.clientId,
+    case_id: event.caseId,
+    page: event.page ?? null,
+    confidence: event.confidence ?? null,
+    origin: event.origin,
+    project_version: PROJECT_VERSION,
+  });
 }

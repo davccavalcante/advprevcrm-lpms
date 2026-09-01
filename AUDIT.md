@@ -2,6 +2,184 @@
 
 Living audit of project decisions, findings, and inconsistencies. Entries are dated in UTC and never rewritten.
 
+## 2026-09-01T20:19:58Z, the deploy the director ordered, and the two failures before it
+
+Capability statement: production serves the build of the second commit at `https://advprevcrm.tech`, proved through the public address. The deploy failed twice before that, once because the server carried a configuration older than the database and once because the health check of the workflow was written before the office had a door, and the second failure was the workflow being wrong about a correct application.
+
+### What was measured, in order
+
+- **First attempt, run 33552696550, 19:59:41Z to 20:05:37Z, failure.** The build on the server stopped at `NEXT_PUBLIC_SUPABASE_URL is not configured`: the `.env` living on the machine predates the database of this date, so the deployed tree asked for a variable the server had never been given. Consequence, measured and not softened: the public address answered 500 from that moment until the second attempt started the application again. The office was empty of data at the time and no one was working in it, but the site was down and the cause was the deploy that had been ordered.
+- **The repair was a secret, set once and never printed.** `DOTENV_B64` was written from the configuration of the office, with the network exit emptied because the server is already in Brazil and the stage set to production. No value was shown in any log, in any document or in this entry; the temporary file was deleted after use. The workflow already resolved that secret as optional with a fallback, and the fallback was what had failed, because there was nothing on the server to fall back to.
+- **Second attempt, run 33553488914, 20:07:48Z to 20:11:35Z, failure with the application healthy.** The log shows the application starting and answering, `Ready in 443ms`, and then the step failing with `The application is not serving on the loopback port, last status 307`. The check had waited the full 120 seconds for a 200 at the root. The root of this office has answered 307 since the authenticated door of this date, because the middleware refuses a browser without a session before any query runs, so the status the check was demanding could only be produced by an office that had lost its door. The comment beside the check said as much in its own words, that the panel answered without a session because no authentication module existed yet, and that sentence stopped being true earlier today.
+- **P1, the health check asserted a state the constitution forbids.** A check that passes only when the root answers 200 is a check that passes only when the office is open to anyone. It was not merely stale, it was inverted: it would have failed every correct deploy from this date onward and passed the one deploy that must never happen.
+
+### Fixed, and what the fix asserts
+
+- The loopback probe now waits for the sign in screen at `/entrar` to answer 200, which proves three things at once: the process this deploy started is alive, it renders, and the Brazilian Portuguese rewrite of `next.config.ts` survived the build.
+- The public probe now carries the expected status with each path, and there are three: `/` must answer 307, because an office that served its panel to a browser without a session would have lost its door; `/entrar` must answer 200; and `/tarefas` must answer 307, which is the middleware refusing an interior URL. The expectation is written into the assertion, so a future deploy that removes the door fails the check instead of passing it.
+- Measured after, run 33554479476, 20:17:51Z to 20:19:58Z, success on all four jobs: preflight, the gate on Node 24, the gate on Node 22 and the deploy. Its own output reads `GET / -> 307, expected 307`, `GET /entrar -> 200, expected 200`, `GET /tarefas -> 307, expected 307`. Verified independently from this machine after the run: the same three statuses, and the sign in screen rendered in Brazilian Portuguese through the real browser with zero console errors.
+
+### The two failed runs were deleted from the platform, and this is why the account stays here
+
+The method of this office says that a failed workflow run must not stay publicly visible, so runs 33552696550 and 33553488914 were deleted after this entry was written. Their identifiers are kept above on purpose: the account of what failed, why, and what was changed because of it is the thing that has to survive, and it survives here rather than on a platform page that can be deleted. The two runs that remain visible are the successes, and the two Gate runs showing as cancelled were superseded by concurrency when the branch was pushed again, which is not a failure; the head commit was gated green on Node 22 and on Node 24 inside the deploy run itself.
+
+### Two facts the deploy exposed, stated because they are true
+
+- **Configuration coverage: 21 of 85 documented variables are absent from the deployed `.env`.** Named, never valued, they are the tuning of the office and not its credentials: the reasoning deadline and thinking level, the base address of the model, the reading language and the two confidence thresholds, the six price figures and the four ceilings of the intelligence layer, the additional registration to monitor, the capture window and staleness, the critical deadline horizon and the internal task margin. Every one of them was checked in code and every one carries a default beside its reading, so the office runs on the documented defaults until the director sets them. This is a warning in the workflow and not a failure, and it is correct that it is.
+- **Production and development share one Supabase project.** The method law of this office requires three environments with independent databases and keys. There is one. The director provisions credentials and this is his to decide, so it is recorded here and was not acted on.
+
+### The gate moved from 158 files to 156, and it was not a loss
+
+`biome.json` sets `vcs.useIgnoreFile`, so the check reads the same ignore file as the repository. Making the four internal documents and the `.claude` folder private removed exactly two checked files from its scope, `.claude/settings.json` and `.claude/launch.json`, which are the only files under that folder that Biome parses. Measured: 158 minus 2 equals 156, `tsc` 0 errors, 92 tests passing in 1 file, `next build` producing 22 routes. No source file left the check.
+
+## 2026-09-01T19:53:03Z, the method law was public and is not any more
+
+Capability statement: the four governing documents of this office and the whole `.claude` folder were readable by anyone on the public repository since the initial commit, and they are not any more. The director ordered them private, ordered a second commit and ordered the deploy.
+
+### Finding, with the evidence and the decision
+
+- **P1, internal documents were public.** Measured on this date against the remote: `PREAMBLE.md` 47,420 bytes, `AGENTS.md` 27,823 bytes, `CLAUDE.md` 19,151 bytes, `HANDOFF.md` 18,543 bytes and `.claude/settings.json` 314 bytes, all served by the public repository, which had one commit, zero forks and zero stars. They carry the method law, the server of the office with its address and user, the monitored registration, the operating rules and the measured state of the office. Removing them in a new commit would not have taken them off the air: the initial commit would keep serving every byte forever. Its hash is deliberately not written in this document, because publishing the pointer would undo the removal.
+- **The inconsistency was put to the director, because his own law requires it.** His order asked for the initial commit to stay and for these files never to be public, and the two cannot both hold. He chose, on this date, to rewrite the initial commit so that it never carried them, keeping the two commit structure he asked for. The hash of the first commit therefore changes; with zero forks and zero stars, nobody else is affected.
+- **Fixed:** `.gitignore` now covers `/.claude/`, `/PREAMBLE.md`, `/HANDOFF.md`, `/AGENTS.md` and `/CLAUDE.md`, with the reason written beside them, and the five paths were removed from the index. They stay on disk, where the office works with them. The initial commit was rebuilt from its own tree minus those paths, keeping its message, its author, its committer and both of its dates, and the second commit was written on top, so the history is the two commits the director asked for.
+- **The tag was the thing that would have kept it alive, and it was found by measuring instead of assuming.** After the branch was rewritten, `PREAMBLE.md` still answered with 47,420 bytes through `?ref=v1.0.0-canary`, because the tag and the release still pointed at the old commit, and a tagged object is never collected. The tag was moved to the rebuilt initial commit and the release target was moved with it. Measured after: the repository has exactly two references, `refs/heads/main` and `refs/tags/v1.0.0-canary`, and neither reaches the old commit; the file answers 404 through the branch and through the tag.
+- **Residual risk, stated and not repaired by me.** An object that no reference reaches is still served by the platform when addressed by its full hash, until the platform collects it, and that collection is neither immediate nor exposed by any interface. Measured at this recording: addressed by its full hash, the old commit still returns the file. Nobody can reach that hash from the repository any more, and it is written nowhere in these documents. Eliminating it with certainty needs one of two acts that are the director's: asking the platform's support to purge unreachable objects, or deleting and recreating the repository, which would also destroy the release and the workflow history. Neither was done without his order.
+
+### What stays public, measured and stated
+
+No document that remains public carries a CPF. `AUDIT.md` and `CHANGELOG.md` each carry one unified process number and the registration `SP289870`; `TASK.md` carries the registration twice; `AUDIT.md` names the lawyer of the office once. A lawyer's registration is a public record, a process number is public in the electronic system unless it runs under seal, and the name of the lawyer who owns the office is public. No client name, no CPF and no health data is in any of them. The director's list was followed exactly and was not widened by me.
+
+## 2026-09-01T19:36:27Z, third round, the rule that most protects the office was not being obeyed
+
+Capability statement: an act carrying two divergent deadlines was resolving to one of them and the office was computing a deadline it had no right to compute. It is fixed, it is under test, and the entity now states what the code really does. The store of the office is clean of everything the test campaigns wrote.
+
+### Findings, with the evidence and the fix
+
+- **P0, the machine was choosing between two possible deadlines.** Constitution item twelve, decided on 2026-08-12 and expressly not revisitable, says the machine never chooses between two deadlines in the same act and that neither is calculated. Measured on this date with the act of the existing test, "manifestação no prazo de 15 (quinze) dias e resposta no prazo de 30 dias": `extractAct` returned `days = 15`, marking the divergence only as residue, and the pipeline computes whenever `days` is not null, so a deadline of fifteen days would have been written to the case, with its whole legal chain, over an act the office was forbidden to resolve. The test that existed only asserted that the residue was marked, which is why it passed for three weeks. Fixed in `src/lib/capture/extraction.ts`: an ambiguous act resolves to no deadline and to no source, and both values stay in `candidates` for the lawyer. The test now asserts `days` is null and that the reading is not fully deterministic. Measured after: the one hundred and sixty one real act shapes of the corpus still pass, so nothing that was recognised stopped being recognised.
+- **P1, the applied note did not say what went to the lawyer.** An act that produced nothing said only that nothing was recognised. It now names the residue: "Para decisão do advogado: prazos divergentes no mesmo ato: 15, 30 dias."
+- **P1, the entity was silenced by a cleaned store.** Measured on this date: after the interaction folder of the body was removed, every exchange failed with "A camada de raciocínio não respondeu agora", because the body writes each interaction as a file and the universe survives a module reload on the global object, so it never notices that its store left underneath it. Fixed in `src/lib/trinity/universe.ts`: the store of the body is created, idempotently, before the body is built.
+
+### Verified in this round, with no finding
+
+- No path writes a deadline as confirmed except `confirmDeadline`, which requires an author, and the database refuses a confirmation without one.
+- The metadata base of the Conselho Nacional de Justiça appears in the code only in the comment that says it is never a source of a deadline.
+- No image, page or scanned document reaches the model: no base64, no inline data, no attachment in the reasoning layer.
+- The deadline module carries no legal value in code. The national holidays, the year end recess with its two grounds, and the per court calendars live in `config/court-calendars.yaml`, each with its source and its review note.
+- An act whose deadline counts from another event, and a judicial order to wait, both resolve to no deadline, asserted by two tests over real acts.
+
+### The store of the office, cleaned and stated
+
+The three campaigns of one hundred questions wrote three hundred and twelve conversations, three hundred and thirty six lines in the consumption ledger, one hundred and eighty one body interactions and a response cache, all of them mine and none of them the operation of the office, and the daily token ceiling was consumed by them, which would have left the real user unable to speak to the entity on the day of delivery. All of it was removed. What was kept, untouched: the universe of the current generation under `data/_trinity-002/maic`, twenty three files, with the axioms, the incarnation, the creator keyring and the hash-chained audit, because a chain is never edited and the birth of the entity happened once. The chain therefore records exchanges whose conversations no longer exist, which is stated here rather than repaired.
+
+### Recorded, not a defect
+
+The incarnation record carries `archetype: virgo-sun`, a field the published SDK writes at birth. The constitution forbids the entity to discuss astrology, and it refuses when asked, measured in the campaign; the field is the signature of the SDK and editing a birth record to please a reading of the rule would be worse than the field.
+
+### Measured at this recording
+
+- Gate: `tsc` 0 errors, `biome check` 0 errors on 158 files, 92 tests passing in 1 file, `next build` compiling. Under `src/`: 149 TypeScript files and 27,978 lines.
+- Eleven screens render with a real session, every heading in Brazilian Portuguese, zero console errors.
+- The entity, asked what happens when an act brings two different deadlines, answers "Vai para decisão humana. Nenhum prazo é calculado", which is now what the code does. Before this round it was what the code said and not what it did.
+- The office at zero: every table empty except the single account, both buckets empty, and the local store carrying only the universe.
+
+### Not audited in this round
+
+Retention, deletion and the tested restoration of a backup, which do not exist. The phase gates and the financial apportionment, which do not exist. The observation deck and the second reading were not re-exercised. The capture against the live DJEN was not re-run, because this machine cannot reach it without the office tunnel.
+
+## 2026-09-01T18:58:42Z, the entity reads the office and answers fast
+
+Capability statement: the entity reads the records of the whole office and no longer the screen the lawyer is on, a courtesy question opens no record, and the reasoning of the model is bounded, which took the median answer from about seven seconds to about two. Measured over three campaigns of one hundred real questions each, fifty about the system and fifty about anything else.
+
+### What the director reported, and what the measurement found
+
+- **Confirmed, the entity answered about the screen.** Measured before the fix: "Conforme o indicador do Painel (carteira do escritório)" and "Não há na tela atual um cadastro". The cause was in the reading layer: the assembled context stated which screen the lawyer was on, labelled the aggregates as panel indicators, and the answer cache separated the same question by screen. Fixed: the context carries the office and never the page, the cache key no longer has the screen, and the reading now says out loud that the screen is not a source. Measured after: zero of one hundred answers speak about the screen.
+- **Confirmed, the status line lied.** The panel said "David está lendo os registros" for "OI". Fixed twice over: the line now says "David está respondendo", and a greeting, a thank you or a question about who the entity is opens no record at all, which is decided by a rule over the question and not by the model.
+- **Confirmed, it was slow, and the cause was not the office.** Measured on the running service with the office keys: the same greeting cost between 3.0 and 13.3 seconds with the reasoning the Gemini 3 family does by default, spending between two hundred and seven hundred thinking tokens for a twenty token answer, and 1.3 seconds with the reasoning at its minimum. The office now builds its Gemini model over the documented HTTP extension point of modelchain, which the shipped factory does not expose, and the level is configuration, `GEMINI_THINKING_LEVEL`, default minimal.
+
+### Findings of this round, with the fix
+
+- **P1, a refusal of the governance was shown as a failure of the system.** Asked whether a deadline can be confirmed automatically, the lawyer read "Os registros do escritório não chegaram à camada de raciocínio". The cause: MAIC refuses before the model, so the office context never reaches the adapter, and the blind answer guard fired on the refusal. Fixed: the guard runs after the verdict and only over text the model produced. Measured after: the same question answers "A confirmação de prazo é ato humano do advogado, registrado em auditoria."
+- **P1, the entity lost the rules of its own office.** Rewriting the reading over the records removed the sections that were fed by the emptied fixture, and with them the four teams, the access rule, the phase gate and the two states of a deadline. Measured: "Não há registro de equipes ou times nos dados do escritório", and an answer about the Brazilian judiciary in general when asked whether one lawyer sees another's case. Fixed with a section of the office's own rules, domain knowledge and not case data, like the section of the practice spheres. Measured after: the four teams, the access rule in the database, the phase gate and the deadline states are answered from the office.
+- **P2, an empty answer reached the panel as an empty bubble.** Fixed: a model that produced no text produced no answer, and the office says so.
+- **P2, one model could hold the lawyer indefinitely.** Fixed with a deadline per model, `IM_MODEL_DEADLINE_MS`, default twenty seconds, after which the next model is tried.
+
+### What the reading carries now
+
+Clients, cases, deadlines with the whole chain and the state of each, tasks, appointments, reminders, documents with the measured confidence of the local reading, notices prepared for the client, communications captured from the official source, linked and unlinked, with the text of the act and what the deterministic rule read from it, the health of the capture, the figures of the office computed over those same records, and the rules of the office itself. The screen is not in it.
+
+### Measured, over one hundred questions each time
+
+- Before the work, six probe questions from the panel: median 6.6 seconds, worst 26.9 seconds, and the answers framed by the screen.
+- First campaign, one hundred questions: median 6.9 seconds, ninetieth percentile 30.0 seconds, one answer speaking of the screen.
+- Third campaign, one hundred questions with the answer cache emptied first: of the thirty eight answered by the model before the daily token ceiling stopped the office, median 5.8 seconds, ninetieth percentile 12.4 seconds, worst 15.3 seconds; zero empty answers, zero answers in another language, zero failures of the system. The remaining sixty one were refused by the daily ceiling of the consumption ledger, which is the cost control working and is recorded here because a campaign that spends the office's day has to say so.
+- With the Gemini keys healthy, measured separately: a greeting answers in 1.3 to 1.4 seconds and a question over the records in 2.1 to 2.3 seconds.
+
+### Provisioning facts the office has to know, not defects of the code
+
+- Of the five Gemini keys, one answers 403 denied access and the other four are free tier: they answered 200 in about two seconds until their daily quota ran out during these campaigns, after which every one answers 429. With Gemini exhausted the transport falls to Claude, which answers correctly in about ten seconds, which is the slower figure in the measurements above.
+- Of the two Anthropic keys, one answers 200 in 1.9 seconds and the other answers 401 invalid, which was already recorded on 2026-08-15.
+- The daily token ceiling of the office was reached during the third campaign. It is configuration, and it did exactly what it exists to do.
+
+### Not audited in this round
+
+The second reading, the observation deck and the durable capture were not re-exercised. Retention, phase gates in code and financial apportionment do not exist. The improper access probe of 2026-09-01T17:27:13Z was not re-run, because no policy changed here.
+
+## 2026-09-01T17:27:13Z, second round, the access matrix exercised against real accounts
+
+Capability statement: the access matrix of the four teams was exercised for the first time against real second and third accounts, three policy holes were found and closed, and every screen now passes an accessibility pass in both themes with zero serious or critical violations.
+
+### Findings, with the evidence and the fix
+
+- **P0, a lawyer could promote himself to the administration.** Row level security decides whether a row may be written, never which column of it, and `profiles_self_update` allowed an account to update its own row. Measured: signed in as a lawyer, `update profiles set team = 'administration' where id = auth.uid()` was accepted and the team changed, which hands that account every case of the office and the audit trail with it. Fixed with a trigger, `public.guard_profile_team`, that refuses a change of team by anyone outside the administration and refuses a change of identifier by anyone. Re-measured: refused.
+- **P1, a lawyer could download the health document of another lawyer's client.** The storage policy on `case-documents` only excluded the finance team; it never asked whether the caller could read the case. Measured: signed in as the lawyer of case B, the bytes of the document of case A were downloaded successfully through the storage API. The object name is not guessable, which is not access control. Fixed: the policy now requires `public.can_read_case((storage.foldername(name))[1])`, the first folder of the object name being the identifier of the case. Re-measured: refused.
+- **P1, any account could download any other account's photo.** The policy named `an account reads its own photo` checked only the bucket. Measured: one account downloaded another's photo. Fixed: the folder must be the identifier of the account, or the caller must be the administration. Re-measured: refused.
+- **P2, the document route wrote a constant role into the sensitive access trail.** It recorded `role: "admin"` whoever was asking. Fixed: the author and the role come from the session.
+- **P2, a stored record reached the domain without passing its schema.** The mappers of `records-store.ts` asserted the sphere and the status with a type cast instead of validating them. Fixed: `clientOf` and `caseOf` parse through `storedClientSchema` and `storedCaseSchema`, so a row the schema rejects is refused instead of guessed at. Proved by re-running the whole path through the interface afterwards: the records the office writes satisfy their own schemas.
+- **P1, the wordmark failed the contrast standard on every screen.** Measured with the engine already installed in this project: the brand gold on white is 2.31 to one, below the three to one the standard requires even for large text, and it appeared on all twelve screens. Fixed with a token, never a literal: a deepened gold, `--palette-gold-deep`, behind a new semantic `--brand-text` that is the deep gold on light surfaces and the brand gold on dark ones, where the original reads at 6.97 to one. Re-measured: zero violations on twelve screens in both themes.
+
+### What was measured, and how it can be replicated
+
+- Improper access probe: four temporary accounts, one for each team plus a second lawyer, two cases of two different lawyers, one document with its bytes and its extracted page, and nineteen attempts covering the case of another lawyer, its document, its extracted text and its bytes, the finance team against documents and against the client table, the audit trail read, updated and deleted by a lawyer, the intake team against another account's profile, the self promotion and the photo of another account. Result after the fixes: nineteen of nineteen as the rules require, zero policy failures. Every account and every record created by the probe was removed at the end.
+- Duplication of a captured act: the same act written twice was refused by the database with `23505`, which is the code the store reads as a duplicate, and a different act of the same process was stored. Unavailability was measured in the first round, when the run recorded its honest failure.
+- Accessibility: twelve screens, light and dark, with the `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa` rule sets. Zero violations after the fix.
+- Mobile at 390 by 844: eleven screens, none with horizontal scrolling.
+- Gate: `tsc` 0 errors, `biome check` 0 errors on 158 files, 86 tests passing in 1 file, `next build` compiling. Under `src/`: 149 TypeScript files, 27,497 lines. Policies in force: twenty nine in the public schema and five in storage.
+
+### Not audited, and stated so
+
+- Retention, deletion and the restoration of a backup. No policy exists and no copy was restored.
+- The phase gates and the financial apportionment, which do not exist.
+- The probe is a live script and not part of the automated suite, because the suite runs in the delivery esteira without a database. Any change to a policy or to a storage rule has to be followed by running it again; what it asserts is written above, item by item, so it can be rebuilt from this entry.
+
+## 2026-09-01T16:53:54Z, database, authentication and the removal of the demonstration dataset
+
+Capability statement: the office has a database, an authenticated door, an immutable trail written on every act, and no invented number on any screen. What has no source of its own shows an honest empty state.
+
+### Findings of this audit, with what was done about each
+
+- **P1, no act of the office left a trail.** The persistence layer wrote clients, cases, documents, deadlines, tasks, reminders and notices, and confirmed deadlines, decided tasks and completed reminders, and none of it appended an `AuditEvent`, which the obligatory standards require for every one of those acts. Fixed: one function in `src/lib/records-store.ts` appends the row after the act it describes and never before, refuses silently to nobody, and the application holds no privilege to update or delete what it wrote. Proved live through the interface with `client-created`, `case-created`, `document-uploaded` and two `document-state-changed`, each naming the signed in member and bound to the account.
+- **P1, the trail of who read a sensitive document was a file on disk.** `document-access-log.ts` appended to a YAML under `data/`, outside the database the director ordered, and the table meant for it carried cascading foreign keys, so deleting a document would have erased the evidence of who read it. Fixed: the table was rebuilt with the whole event, no foreign keys, insert restricted to whoever may read the case and reading restricted to the administration, and the module writes to it. Proved live with two rows, the preview of the original bytes and the reading of the extracted text with its measured confidence.
+- **P1, the name of a person was written in code.** Two server action modules attributed every act to a fixed string, and the assembly of financial lines attributed all money to the same fixed name. A trail that names the wrong person is worse than no trail. Fixed: the author is the member signed in, read from the session on the server, and the attribution of a financial line comes from the record itself, with an office wide indicator attributable to nobody and therefore never shown outside the administration.
+- **P1, the reading layer read a demonstration dataset.** The panel, the search, the notifications, the agenda and the task board were fed by fixtures while the queue beside them was fed by real records, which this project has already paid for twice. Fixed: thirty three collections and every aggregate of the fixture are empty, and the surfaces read the records of the office. What has no table yet shows an empty state and invents nothing.
+- **P2, a list cut itself in silence.** The dashboard card of pending work showed five items of an unknown total. Fixed: it states how many it shows and how many exist.
+- **P2, a division by zero reached the screen.** The donut of deadlines computed a percentage over a total of zero. Fixed: it says "Sem prazos".
+- **P2, three sentences of the interface had become false.** A source that never ran read "última execução em nunca", the triage queue blamed a database that now exists, and two finance cards promised that a sum closed a month that was fixture data. All three corrected.
+- **Acknowledged, not defects.** `src/middleware.ts` carries no `server-only` guard because middleware is structurally server side and the guard would fight its runtime. The phrase "EU AI Act" survives in one governance note as the proper name of a European regulation, which the language law preserves like any legal citation. The string "As an AI" survives in the second reading module as a phrase the model is forbidden to emit, which is the guard and not a claim of the project. Two spaced dashes survive inside test strings, because a test of a rejection must contain the thing being rejected.
+
+### What was measured, and where
+
+- Database: fourteen tables, row level security on all fourteen, twenty nine policies, two private buckets. Region South America, São Paulo, SSL enforced.
+- The office at zero after the verification records were removed: every table at zero rows except `profiles`, which holds the single account of the office with no photo, and zero objects in both buckets.
+- The whole write path exercised through the real browser of this machine, signing in through the form with the credentials read from `.env` by the automation: client registered, case opened, document uploaded, read by the local engine with confidence 92.9 on one page by optical recognition, and the state moving uploaded, processing, processed on the screen.
+- Eleven screens rendered with a real session: `/`, `/clientes`, `/casos`, `/tarefas`, `/agenda`, `/atendimento`, `/administrativo`, `/judicial`, `/financeiro`, `/configuracoes` and `/clientes/novo`, every heading in Brazilian Portuguese, no English, no fixture word, no `NaN`, no `undefined`, and zero console errors.
+- The scheduled capture wrote its honest failure to the database, unable to reach the DJEN from this machine, which is the recorded egress constraint, and the health panel read it back.
+- Gate: `tsc` 0 errors, `biome check` 0 errors on 158 files, 86 tests passing in 1 file, `next build` producing 22 routes, of which 18 pages and 3 route handlers. Under `src/`: 149 TypeScript files, 27,485 lines.
+
+### Not audited, and stated so
+
+- The access matrix of the four teams against second and third accounts. The office has one account today, so a lawyer reading another lawyer's case, the finance team reaching a health document and the intake team reaching money were not exercised. The rule lives in the database, which is what makes the test possible; it has not been run.
+- Retention, deletion and the restoration of a backup. No policy exists and no copy was restored, so nothing about them is claimed.
+- The phase gates and the financial apportionment, which do not exist.
+
 ## 2026-08-09T01:33:40Z, scaffold, dependencies, and gate baseline
 
 Capability statement: the repository is now a buildable Next.js application with all four quality gates green; no product feature exists yet.

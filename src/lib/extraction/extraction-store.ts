@@ -1,60 +1,97 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { parse } from "yaml";
+import "server-only";
+import type { DocumentStateId } from "@/lib/case-domain";
 import {
   type DocumentExtraction,
   extractDocument,
   fingerprintOf,
 } from "@/lib/extraction/local-extraction";
-import { caseDirOf, readDocumentBytes } from "@/lib/records-store";
-import { serialiseByFile, writeYamlAtomic } from "@/lib/trinity/yaml-store";
+import { readDocumentBytes } from "@/lib/records-store";
+import { serverSupabase } from "@/lib/supabase/server";
 
 /*
- * What was read from a document lives beside the document, in a sibling YAML,
- * inside the same case folder. YAML because a person and a language model both
- * read it without a parser in between, and beside the bytes because the
- * original must always be reachable next to the text that came out of it.
+ * What was read from a document lives beside the document, in the database, one
+ * row per page, with the confidence that page was measured with and where the
+ * text came from. Beside the document and never instead of it: the original
+ * bytes stay in the private bucket and the case record shows both, page by
+ * page, because a text without its source cannot be checked by a lawyer.
  *
  * A document is read once. The fingerprint of the bytes is stored with the
- * extraction, so a second pass over the same file returns what is on disk and
- * never pays for the work again. Two byte identical documents in the office
+ * document, so a second pass over the same file returns what the database holds
+ * and never pays for the work again. Two byte identical documents in the office
  * share a fingerprint, which the corpus of this office proved on the first run:
  * the physiotherapy report was uploaded twice under different names.
  */
 
-const EXTRACTION_SUFFIX = ".extraction.yaml";
+type DocumentRow = {
+  file_name: string;
+  fingerprint: string | null;
+  state: string;
+  extracted_at: string | null;
+  mean_confidence: number | null;
+  page_count: number | null;
+  ocr_pages: number | null;
+  text_layer_pages: number | null;
+  extraction_engine: string | null;
+  extraction_language: string | null;
+  extraction_duration_ms: number | null;
+  extraction_note: string | null;
+};
 
-function extractionFile(
-  clientId: string,
-  caseId: string,
-  documentId: string,
-): string {
-  return path.join(
-    caseDirOf(clientId, caseId),
-    "documents",
-    `${documentId}${EXTRACTION_SUFFIX}`,
-  );
-}
+const DOCUMENT_FIELDS =
+  "file_name, fingerprint, state, extracted_at, mean_confidence, page_count, ocr_pages, text_layer_pages, extraction_engine, extraction_language, extraction_duration_ms, extraction_note";
 
 export async function readExtraction(
-  clientId: string,
+  _clientId: string,
   caseId: string,
   documentId: string,
 ): Promise<DocumentExtraction | null> {
-  try {
-    const raw = await readFile(
-      extractionFile(clientId, caseId, documentId),
-      "utf8",
-    );
-    const parsed = parse(raw) as DocumentExtraction | null;
-    return parsed?.documentId ? parsed : null;
-  } catch {
+  const supabase = await serverSupabase();
+  const { data: document } = await supabase
+    .from("case_documents")
+    .select(DOCUMENT_FIELDS)
+    .eq("id", documentId)
+    .eq("case_id", caseId)
+    .maybeSingle<DocumentRow>();
+
+  /* No reading recorded yet is not a failure: the document exists and the text
+   * does not, and the interface says exactly that. */
+  if (!document?.extracted_at || !document.fingerprint) {
     return null;
   }
+
+  const { data: pages } = await supabase
+    .from("document_pages")
+    .select("page_number, text, source, confidence, words, attempt")
+    .eq("document_id", documentId)
+    .order("page_number", { ascending: true });
+
+  return {
+    documentId,
+    fileName: document.file_name,
+    fingerprint: document.fingerprint,
+    engine: document.extraction_engine ?? "",
+    language: document.extraction_language ?? "",
+    extractedAt: document.extracted_at,
+    durationMs: document.extraction_duration_ms ?? 0,
+    pageCount: document.page_count ?? 0,
+    ocrPages: document.ocr_pages ?? 0,
+    textLayerPages: document.text_layer_pages ?? 0,
+    meanConfidence: Number(document.mean_confidence ?? 0),
+    state: document.state as DocumentStateId,
+    note: document.extraction_note ?? "",
+    pages: (pages ?? []).map((page) => ({
+      page: page.page_number,
+      source: page.source as DocumentExtraction["pages"][number]["source"],
+      text: page.text,
+      confidence: Number(page.confidence),
+      words: page.words,
+      attempt: page.attempt,
+    })),
+  };
 }
 
 /*
- * Reads the document once and keeps the result. Returns what is already on disk
+ * Reads the document once and keeps the result. Returns what the database holds
  * when the fingerprint matches, which is what makes the reading instantaneous
  * and free for every question that follows.
  */
@@ -74,17 +111,51 @@ export async function ensureExtraction(
     return existing;
   }
 
-  const file = extractionFile(clientId, caseId, documentId);
-  return serialiseByFile(file, async () => {
-    const extraction = await extractDocument({
-      documentId,
-      fileName: found.document.fileName,
-      mimeType: found.document.mimeType,
-      bytes: found.bytes,
-    });
-    await writeYamlAtomic(file, extraction);
-    return extraction;
+  const extraction = await extractDocument({
+    documentId,
+    fileName: found.document.fileName,
+    mimeType: found.document.mimeType,
+    bytes: found.bytes,
   });
+
+  const supabase = await serverSupabase();
+  /* The pages of this document are replaced as a whole, never merged, because a
+   * second reading of the same bytes is one measurement and not an addition to
+   * an older one. */
+  await supabase.from("document_pages").delete().eq("document_id", documentId);
+  if (extraction.pages.length > 0) {
+    await supabase.from("document_pages").insert(
+      extraction.pages.map((page) => ({
+        document_id: documentId,
+        page_number: page.page,
+        text: page.text,
+        source: page.source,
+        confidence: page.confidence,
+        words: page.words,
+        attempt: page.attempt,
+      })),
+    );
+  }
+  await supabase
+    .from("case_documents")
+    .update({
+      state: extraction.state,
+      state_note: extraction.note,
+      fingerprint: extraction.fingerprint,
+      extracted_at: extraction.extractedAt,
+      mean_confidence: extraction.meanConfidence,
+      page_count: extraction.pageCount,
+      ocr_pages: extraction.ocrPages,
+      text_layer_pages: extraction.textLayerPages,
+      extraction_engine: extraction.engine,
+      extraction_language: extraction.language,
+      extraction_duration_ms: extraction.durationMs,
+      extraction_note: extraction.note,
+    })
+    .eq("id", documentId)
+    .eq("case_id", caseId);
+
+  return extraction;
 }
 
 /*

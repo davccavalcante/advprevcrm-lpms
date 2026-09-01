@@ -1,35 +1,25 @@
 import "server-only";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { ulid } from "ulid";
-import { parse } from "yaml";
 import { z } from "zod";
-import { personaLawyer } from "@/lib/persona";
-import { serialiseByFile, writeYamlAtomic } from "@/lib/trinity/yaml-store";
+import { serverSupabase } from "@/lib/supabase/server";
 
 /*
- * The profile of the account that operates this installation: name, email,
- * password and photo, editable on the settings screen by the director's order
- * of 2026-08-21. The record lives on disk under `data/`, outside the
- * repository, and every change appends an immutable line to its own change
- * log, with author, field, values before and after, and the moment, because
- * account changes are audited actions.
+ * The account that operates this installation: name, electronic address,
+ * password and photo. All four live in Supabase, the first three in the profile
+ * row and in the authentication service, the photo in a private bucket, and not
+ * one of them in a file on the server any more.
  *
- * What this is not, said out loud: there is no authentication module in this
- * phase, so the password recorded here does not guard any login yet. It is
- * stored only as a salted scrypt hash, never in clear, and changing it
- * requires the current one once one exists. When Supabase auth arrives, this
- * record is the seed of the real credential and the rule moves to the
- * database.
+ * The password is the real credential now. It is changed at the authentication
+ * service, it is never stored by this application, and this application never
+ * sees it: changing it requires proving the current one, which is done by
+ * exchanging it for a session and discarding that session immediately.
  *
- * The record is seeded from the persona dataset and only materialises on the
- * first real change, so a fresh installation keeps showing the display data
- * the director ordered without creating files nobody asked for.
+ * Every change appends an immutable line to the audit trail, with author, field
+ * and moment. Password material never appears there; the action name is the
+ * whole record of it.
  */
 
-const PROFILE_DIR = path.join(process.cwd(), "data", "_office");
-const PROFILE_FILE = path.join(PROFILE_DIR, "profile.yaml");
+const AVATARS_BUCKET = "avatars";
 
 /* Bounds of the photo upload, stated on the screen with the same numbers. */
 export const PHOTO_MAX_BYTES = 2_000_000;
@@ -54,44 +44,7 @@ const passwordSchema = z.object({
 
 export type PasswordInput = z.infer<typeof passwordSchema>;
 
-type StoredPassword = {
-  algorithm: "scrypt";
-  saltHex: string;
-  hashHex: string;
-  updatedAt: string;
-};
-
-type StoredPhoto = {
-  fileName: string;
-  contentType: string;
-  bytes: number;
-  updatedAt: string;
-};
-
-type ProfileChange = {
-  at: string;
-  actor: string;
-  action:
-    | "identity-updated"
-    | "password-set"
-    | "password-changed"
-    | "photo-updated";
-  /* Values before and after for identity fields. Password material never
-   * appears here; the action name is the whole record of it. */
-  detail: string;
-};
-
-type StoredProfile = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  password: StoredPassword | null;
-  photo: StoredPhoto | null;
-  updatedAt: string;
-  changes: ProfileChange[];
-};
-
-/* What the screens receive. No hash, no salt, no file path. */
+/* What the screens receive. No token, no storage path, nothing of the credential. */
 export type OfficeProfileView = {
   firstName: string;
   lastName: string;
@@ -104,75 +57,107 @@ export type OfficeProfileView = {
   updatedAt: string | null;
 };
 
-function seedProfile(): StoredProfile {
-  const parts = personaLawyer.fullName.trim().split(/\s+/);
-  return {
-    firstName: parts[0] ?? personaLawyer.firstName,
-    lastName: parts.slice(1).join(" "),
-    email: personaLawyer.email,
-    password: null,
-    photo: null,
-    updatedAt: "",
-    changes: [],
-  };
-}
+const TEAM_LABELS: Record<string, { team: string; role: string }> = {
+  administration: {
+    team: "Administração",
+    role: "Administração do escritório",
+  },
+  intake: { team: "Atendimento", role: "Atendimento e triagem" },
+  lawyer: { team: "Advogados", role: "Advogado responsável" },
+  finance: { team: "Financeiro", role: "Financeiro" },
+};
 
-async function readStored(): Promise<StoredProfile> {
-  try {
-    const raw = parse(
-      await readFile(PROFILE_FILE, "utf8"),
-    ) as Partial<StoredProfile> | null;
-    if (raw && typeof raw.firstName === "string") {
-      const seed = seedProfile();
-      return {
-        firstName: raw.firstName,
-        lastName:
-          typeof raw.lastName === "string" ? raw.lastName : seed.lastName,
-        email: typeof raw.email === "string" ? raw.email : seed.email,
-        password: raw.password ?? null,
-        photo: raw.photo ?? null,
-        updatedAt: raw.updatedAt ?? "",
-        changes: Array.isArray(raw.changes) ? raw.changes : [],
-      };
-    }
-  } catch {
-    /* No profile recorded yet: the seed answers. */
-  }
-  return seedProfile();
-}
+const EMPTY_VIEW: OfficeProfileView = {
+  firstName: "",
+  lastName: "",
+  fullName: "",
+  email: "",
+  role: "",
+  team: "",
+  avatarSrc: "",
+  passwordSet: false,
+  updatedAt: null,
+};
 
-function viewOf(stored: StoredProfile): OfficeProfileView {
-  const fullName = `${stored.firstName} ${stored.lastName}`.trim();
+type ProfileRow = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  team: string;
+  avatar_path: string | null;
+  updated_at: string | null;
+};
+
+function viewOf(row: ProfileRow): OfficeProfileView {
+  const fullName = `${row.first_name} ${row.last_name}`.trim();
+  const labels = TEAM_LABELS[row.team] ?? { team: row.team, role: row.team };
   return {
-    firstName: stored.firstName,
-    lastName: stored.lastName,
+    firstName: row.first_name,
+    lastName: row.last_name,
     fullName,
-    email: stored.email,
-    role: personaLawyer.role,
-    team: personaLawyer.team,
-    avatarSrc:
-      stored.photo === null
-        ? personaLawyer.avatarSrc
-        : `/api/avatar?v=${encodeURIComponent(stored.photo.updatedAt)}`,
-    passwordSet: stored.password !== null,
-    updatedAt: stored.updatedAt.length > 0 ? stored.updatedAt : null,
+    email: row.email,
+    role: labels.role,
+    team: labels.team,
+    /* The photo is served by the application's own route, never by a link that
+     * outlives a session. An account with no photo shows its initials, which is
+     * the honest state of an office that has just started. */
+    avatarSrc: row.avatar_path
+      ? `/api/avatar?v=${encodeURIComponent(row.updated_at ?? "")}`
+      : "",
+    /* An account only exists here because it exists at the authentication
+     * service, and there it always carries a credential. */
+    passwordSet: true,
+    updatedAt: row.updated_at,
   };
+}
+
+async function currentRow(): Promise<ProfileRow | null> {
+  const supabase = await serverSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return null;
+  }
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, first_name, last_name, email, team, avatar_path, updated_at")
+    .eq("id", user.id)
+    .maybeSingle<ProfileRow>();
+  return data ?? null;
 }
 
 export async function officeProfile(): Promise<OfficeProfileView> {
-  return viewOf(await readStored());
-}
-
-async function writeStored(profile: StoredProfile): Promise<void> {
-  await serialiseByFile(PROFILE_FILE, async () => {
-    await mkdir(PROFILE_DIR, { recursive: true });
-    await writeYamlAtomic(PROFILE_FILE, profile);
-  });
+  const row = await currentRow();
+  return row ? viewOf(row) : EMPTY_VIEW;
 }
 
 export type ProfileWriteResult =
   | { ok: true; profile: OfficeProfileView }
   | { ok: false; reason: string };
+
+async function audit(
+  actor: string,
+  action: string,
+  before: unknown,
+  after: unknown,
+): Promise<void> {
+  const supabase = await serverSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  await supabase.from("audit_events").insert({
+    id: ulid(),
+    actor,
+    actor_id: user?.id ?? null,
+    action,
+    entity: "profile",
+    entity_id: user?.id ?? null,
+    before: before === null ? null : (before as object),
+    after: after === null ? null : (after as object),
+  });
+}
 
 export async function updateIdentity(
   input: IdentityInput,
@@ -186,48 +171,43 @@ export async function updateIdentity(
         "Nome, sobrenome e endereço eletrônico precisam estar preenchidos, e o endereço precisa ser válido.",
     };
   }
-  const stored = await readStored();
-  const at = new Date().toISOString();
-  const before = `${stored.firstName} ${stored.lastName} <${stored.email}>`;
-  const after = `${parsed.data.firstName} ${parsed.data.lastName} <${parsed.data.email}>`;
-  if (before === after) {
-    return { ok: true, profile: viewOf(stored) };
+  const row = await currentRow();
+  if (!row) {
+    return { ok: false, reason: "Nenhuma sessão ativa." };
   }
-  const next: StoredProfile = {
-    ...stored,
-    firstName: parsed.data.firstName,
-    lastName: parsed.data.lastName,
-    email: parsed.data.email,
-    updatedAt: at,
-    changes: [
-      ...stored.changes,
-      {
-        at,
-        actor,
-        action: "identity-updated",
-        detail: `${before} -> ${after}`,
-      },
-    ],
-  };
-  await writeStored(next);
-  return { ok: true, profile: viewOf(next) };
-}
 
-function hashPassword(password: string): StoredPassword {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return {
-    algorithm: "scrypt",
-    saltHex: salt.toString("hex"),
-    hashHex: hash.toString("hex"),
-    updatedAt: new Date().toISOString(),
-  };
-}
+  const supabase = await serverSupabase();
+  const at = new Date().toISOString();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      first_name: parsed.data.firstName,
+      last_name: parsed.data.lastName,
+      email: parsed.data.email,
+      updated_at: at,
+    })
+    .eq("id", row.id);
+  if (error) {
+    return { ok: false, reason: "Não foi possível gravar a alteração." };
+  }
 
-function verifyPassword(password: string, stored: StoredPassword): boolean {
-  const hash = scryptSync(password, Buffer.from(stored.saltHex, "hex"), 64);
-  const expected = Buffer.from(stored.hashHex, "hex");
-  return hash.length === expected.length && timingSafeEqual(hash, expected);
+  /* The address of the account changes at the authentication service too, so a
+   * sign in and a profile never disagree about who this member is. */
+  if (parsed.data.email !== row.email) {
+    await supabase.auth.updateUser({ email: parsed.data.email });
+  }
+
+  await audit(
+    actor,
+    "identity-updated",
+    { firstName: row.first_name, lastName: row.last_name, email: row.email },
+    parsed.data,
+  );
+
+  const next = await currentRow();
+  return next
+    ? { ok: true, profile: viewOf(next) }
+    : { ok: false, reason: "Alteração gravada, mas o perfil não foi lido." };
 }
 
 export async function changePassword(
@@ -238,43 +218,58 @@ export async function changePassword(
   if (!parsed.success) {
     return {
       ok: false,
-      reason: `A nova senha precisa ter entre ${PASSWORD_MIN_CHARS} e ${PASSWORD_MAX_CHARS} caracteres.`,
+      reason: `A nova senha precisa ter ao menos ${PASSWORD_MIN_CHARS} caracteres.`,
     };
   }
-  const stored = await readStored();
-  if (stored.password !== null) {
-    const offered = parsed.data.current ?? "";
-    if (offered.length === 0 || !verifyPassword(offered, stored.password)) {
-      return {
-        ok: false,
-        reason: "A senha atual não confere, então nada foi alterado.",
-      };
-    }
+  const row = await currentRow();
+  if (!row) {
+    return { ok: false, reason: "Nenhuma sessão ativa." };
   }
-  const at = new Date().toISOString();
-  const next: StoredProfile = {
-    ...stored,
-    password: hashPassword(parsed.data.next),
-    updatedAt: at,
-    changes: [
-      ...stored.changes,
-      {
-        at,
-        actor,
-        action: stored.password === null ? "password-set" : "password-changed",
-        detail: "Stored as a salted scrypt hash; the value never appears here.",
-      },
-    ],
-  };
-  await writeStored(next);
-  return { ok: true, profile: viewOf(next) };
+
+  const supabase = await serverSupabase();
+
+  /* The current password is proved, never compared: it is exchanged for a
+   * session at the authentication service, which is the only place that knows
+   * it, and the session obtained this way is discarded at once. */
+  if (parsed.data.current !== undefined && parsed.data.current.length > 0) {
+    const proof = await supabase.auth.signInWithPassword({
+      email: row.email,
+      password: parsed.data.current,
+    });
+    if (proof.error) {
+      return { ok: false, reason: "A senha atual não confere." };
+    }
+  } else {
+    return { ok: false, reason: "Informe a senha atual para poder trocá-la." };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.next,
+  });
+  if (error) {
+    return { ok: false, reason: "Não foi possível trocar a senha." };
+  }
+
+  await supabase
+    .from("profiles")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", row.id);
+
+  /* The action is the whole record. No password material is ever written to the
+   * trail, in clear or in any other form. */
+  await audit(actor, "password-changed", null, null);
+
+  const next = await currentRow();
+  return next
+    ? { ok: true, profile: viewOf(next) }
+    : { ok: false, reason: "Senha trocada, mas o perfil não foi lido." };
 }
 
-/* The magic numbers of the three accepted formats, checked on the bytes that
- * actually arrived, because a declared content type is a claim and not a fact. */
+/* The type is decided by the bytes themselves, never by what the browser said
+ * the file was. */
 function sniffedType(bytes: Buffer): (typeof PHOTO_TYPES)[number] | null {
   if (
-    bytes.length > 3 &&
+    bytes.length >= 3 &&
     bytes[0] === 0xff &&
     bytes[1] === 0xd8 &&
     bytes[2] === 0xff
@@ -282,7 +277,7 @@ function sniffedType(bytes: Buffer): (typeof PHOTO_TYPES)[number] | null {
     return "image/jpeg";
   }
   if (
-    bytes.length > 8 &&
+    bytes.length >= 8 &&
     bytes[0] === 0x89 &&
     bytes[1] === 0x50 &&
     bytes[2] === 0x4e &&
@@ -291,9 +286,9 @@ function sniffedType(bytes: Buffer): (typeof PHOTO_TYPES)[number] | null {
     return "image/png";
   }
   if (
-    bytes.length > 12 &&
-    bytes.subarray(0, 4).toString("latin1") === "RIFF" &&
-    bytes.subarray(8, 12).toString("latin1") === "WEBP"
+    bytes.length >= 12 &&
+    bytes.toString("ascii", 0, 4) === "RIFF" &&
+    bytes.toString("ascii", 8, 12) === "WEBP"
   ) {
     return "image/webp";
   }
@@ -314,10 +309,7 @@ export async function updatePhoto(
     return { ok: false, reason: "Nenhum arquivo de imagem foi recebido." };
   }
   if (bytes.length > PHOTO_MAX_BYTES) {
-    return {
-      ok: false,
-      reason: "A foto pode ter no máximo dois megabytes.",
-    };
+    return { ok: false, reason: "A foto pode ter no máximo dois megabytes." };
   }
   const type = sniffedType(bytes);
   if (type === null) {
@@ -326,49 +318,68 @@ export async function updatePhoto(
       reason: "A foto precisa ser um arquivo JPEG, PNG ou WebP.",
     };
   }
-  const at = new Date().toISOString();
-  const fileName = `avatar-${ulid()}.${PHOTO_EXTENSION[type]}`;
-  await mkdir(PROFILE_DIR, { recursive: true });
-  await writeFile(path.join(PROFILE_DIR, fileName), bytes);
+  const row = await currentRow();
+  if (!row) {
+    return { ok: false, reason: "Nenhuma sessão ativa." };
+  }
 
-  const stored = await readStored();
-  const next: StoredProfile = {
-    ...stored,
-    photo: { fileName, contentType: type, bytes: bytes.length, updatedAt: at },
-    updatedAt: at,
-    changes: [
-      ...stored.changes,
-      {
-        at,
-        actor,
-        action: "photo-updated",
-        detail: `${stored.photo?.fileName ?? "persona"} -> ${fileName}, ${bytes.length} bytes`,
-      },
-    ],
-  };
-  await writeStored(next);
-  return { ok: true, profile: viewOf(next) };
+  const supabase = await serverSupabase();
+  const at = new Date().toISOString();
+  /* The object sits under the identifier of the account, which is what the
+   * storage policy checks, so one member can never write over another's photo. */
+  const objectPath = `${row.id}/avatar-${ulid()}.${PHOTO_EXTENSION[type]}`;
+  const upload = await supabase.storage
+    .from(AVATARS_BUCKET)
+    .upload(objectPath, bytes, { contentType: type, upsert: false });
+  if (upload.error) {
+    return { ok: false, reason: "Não foi possível guardar a foto." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_path: objectPath, updated_at: at })
+    .eq("id", row.id);
+  if (error) {
+    await supabase.storage.from(AVATARS_BUCKET).remove([objectPath]);
+    return { ok: false, reason: "Não foi possível gravar a foto no perfil." };
+  }
+
+  if (row.avatar_path) {
+    await supabase.storage.from(AVATARS_BUCKET).remove([row.avatar_path]);
+  }
+
+  await audit(
+    actor,
+    "photo-updated",
+    { photo: row.avatar_path ?? "none" },
+    { photo: objectPath, bytes: bytes.length },
+  );
+
+  const next = await currentRow();
+  return next
+    ? { ok: true, profile: viewOf(next) }
+    : { ok: false, reason: "Foto guardada, mas o perfil não foi lido." };
 }
 
-/* The bytes of the uploaded photo, for the route that serves it. Null when
- * the profile still shows the persona photo. */
+/* The bytes of the photo, for the route that serves it. Null when the account
+ * has no photo, which is how every account of a new installation starts. */
 export async function photoBytes(): Promise<{
   bytes: Buffer;
   contentType: string;
 } | null> {
-  const stored = await readStored();
-  if (stored.photo === null) {
+  const row = await currentRow();
+  if (!row?.avatar_path) {
     return null;
   }
-  /* The file name always comes from this module's own writer, never from the
-   * request, so the read cannot be steered outside the profile folder. */
-  const file = path.join(PROFILE_DIR, path.basename(stored.photo.fileName));
-  try {
-    return {
-      bytes: await readFile(file),
-      contentType: stored.photo.contentType,
-    };
-  } catch {
+  const supabase = await serverSupabase();
+  const download = await supabase.storage
+    .from(AVATARS_BUCKET)
+    .download(row.avatar_path);
+  if (download.error || !download.data) {
     return null;
   }
+  return {
+    bytes: Buffer.from(await download.data.arrayBuffer()),
+    contentType: download.data.type || "application/octet-stream",
+  };
 }

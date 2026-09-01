@@ -241,9 +241,9 @@ export function TriageQueue({ items }: { items: TriageItem[] }) {
 
       <p className="border-t border-line pt-4 text-xs text-ink-soft">
         Toda confirmação e reclassificação fica registrada em auditoria com
-        autor, data, hora e origem. Nesta fase de interface, a confirmação vale
-        apenas para a sessão em uso e ainda não gera o evento de auditoria, que
-        depende do banco.
+        autor, data, hora e origem. A fila de triagem ainda não tem registro
+        próprio no banco do escritório, então a confirmação vale apenas para a
+        sessão em uso e nada é gravado.
       </p>
     </section>
   );

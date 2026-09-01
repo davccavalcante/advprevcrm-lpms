@@ -12,9 +12,15 @@ import { AnswerContent } from "@/components/nhe/answer-content";
 import { askDavid, type NheTurn } from "@/lib/trinity/nhe-actions";
 
 /*
- * The persistent surface of the entity, present on every screen. It knows the
- * screen the lawyer is on and says so, and the lawyer may still ask about
- * anything else in the system.
+ * The persistent surface of the entity, present on every screen. What the
+ * entity reads is the office and never the page: the screen travels only to the
+ * consumption ledger, for cost attribution, and never into the answer, by the
+ * director's order of 2026-09-01.
+ *
+ * The waiting line says that the entity is answering, and not that it is
+ * reading the records, because a courtesy question opens no record and a status
+ * that describes work nobody is doing is a lie the interface tells on every
+ * turn.
  *
  * The assisted-content marking is stated once, at the foot of the panel, by
  * order of the director on 2026-08-11: the surface says the content is assisted
@@ -70,7 +76,7 @@ export function EntityDock({ greeting }: { greeting: string }) {
     latest === undefined
       ? ""
       : latest.result === null
-        ? "David está lendo os registros."
+        ? "David está respondendo."
         : latest.result.ok
           ? "Resposta de David recebida na conversa."
           : "David não respondeu. Leia o aviso na conversa.";
@@ -189,7 +195,7 @@ export function EntityDock({ greeting }: { greeting: string }) {
                 </p>
                 {turn.result === null ? (
                   <p className="w-fit rounded-md bg-inset px-4 py-2 text-sm text-ink-soft">
-                    David está lendo os registros.
+                    David está respondendo.
                   </p>
                 ) : turn.result.ok ? (
                   <div className="rounded-md border border-line bg-inset p-4">

@@ -203,6 +203,16 @@ async function boot(): Promise<Universe> {
   const transport = new ModelTransportAdapter({
     defaultMaxOutputTokens: MAX_OUTPUT_TOKENS,
   });
+  /* The store of the body is created before the body is built. Measured on
+   * 2026-09-01: with the folder absent, every exchange failed with "a camada de
+   * raciocínio não respondeu agora", because the body writes each interaction
+   * as a file and the write threw. The universe survives a module reload on the
+   * global object, so it never notices that its store left underneath it; one
+   * idempotent creation here is what keeps a cleaned store from silencing the
+   * entity until the process restarts. */
+  const bodyStore = path.join(NHE_STORE, nheId);
+  await mkdir(path.join(bodyStore, "interactions"), { recursive: true });
+
   const nhe = new Nhe({
     himHandle: him,
     maicClient: maic,
@@ -210,7 +220,7 @@ async function boot(): Promise<Universe> {
     riskClassifier: officeRiskClassifier,
     nheId,
     version: PROJECT_VERSION,
-    storeDir: path.join(NHE_STORE, nheId),
+    storeDir: bodyStore,
     operatorContext: DAVID_OPERATOR_CONTEXT,
   });
 

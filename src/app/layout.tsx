@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Urbanist } from "next/font/google";
 import { EntityDock } from "@/components/nhe/entity-dock";
+import { currentMember } from "@/lib/auth-actions";
 import { davidOpener } from "@/lib/trinity/nhe-actions";
 import "./globals.css";
 
@@ -26,8 +27,12 @@ const themeInitScript = `(function () {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   /* The entity lives in the root layout on purpose: one single body, present on
-   * every screen, never one instance per screen and never one per lawyer. */
-  const greeting = await davidOpener();
+   * every screen, never one instance per screen and never one per lawyer. It is
+   * absent before a session exists, because the sign in screen carries nothing
+   * of the office and because booting the universe for a visitor who never
+   * signed in would be work done for nobody. */
+  const member = await currentMember();
+  const greeting = member ? await davidOpener() : null;
 
   return (
     <html lang="pt-BR" data-theme="light" suppressHydrationWarning>
@@ -38,7 +43,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className={`${urbanist.variable} min-h-dvh antialiased`}>
         {children}
-        <EntityDock greeting={greeting} />
+        {greeting ? <EntityDock greeting={greeting} /> : null}
       </body>
     </html>
   );

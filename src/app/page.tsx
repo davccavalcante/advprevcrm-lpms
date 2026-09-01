@@ -18,13 +18,21 @@ import { TopNav } from "@/components/dashboard/top-nav";
 import { WeeklyAgenda } from "@/components/dashboard/weekly-agenda";
 import { MotionReveal } from "@/components/motion/motion-reveal";
 import { GovernanceNote } from "@/components/ui/governance-note";
-import { activeCases, listUnifiedCases } from "@/lib/case-views";
+import { dailyPublications } from "@/lib/capture/board-data";
+import {
+  activeCases,
+  deadlineSummary,
+  listUnifiedCases,
+} from "@/lib/case-views";
 import { kpis } from "@/lib/persona";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const activeCaseCount = activeCases(await listUnifiedCases()).length;
+  const cases = await listUnifiedCases();
+  const activeCaseCount = activeCases(cases).length;
+  const deadlines = deadlineSummary(cases);
+  const activity = await dailyPublications(14);
 
   return (
     <DashboardFilterProvider>
@@ -32,7 +40,10 @@ export default async function DashboardPage() {
         <TopNav />
         <main className="grid w-full flex-1 gap-6 px-6 pb-8 lg:grid-cols-(--layout-panel-columns) lg:px-10">
           <MotionReveal order={0} className="h-full min-w-0">
-            <GreetingPanel activeCaseCount={activeCaseCount} />
+            <GreetingPanel
+              activeCaseCount={activeCaseCount}
+              deadlines={deadlines}
+            />
           </MotionReveal>
           <div className="flex min-w-0 flex-col gap-6">
             <DashboardSection id="kpis">
@@ -52,7 +63,7 @@ export default async function DashboardPage() {
             </DashboardSection>
             <DashboardSection id="activity">
               <MotionReveal order={2}>
-                <ActivityChart />
+                <ActivityChart activity={activity} />
               </MotionReveal>
             </DashboardSection>
             <DashboardGroup ids={["phases", "criticalDeadlines"]}>

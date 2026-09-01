@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
-import { officeProfile } from "@/lib/office-profile";
 import { readDocumentBytes } from "@/lib/records-store";
 import { recordDocumentAccess } from "@/lib/trinity/document-access-log";
+import { currentSession } from "@/lib/trinity/nhe-actions";
 
 /*
  * Serves one stored document to the operator, for preview or download. It never
@@ -30,9 +30,12 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   /* The bytes carry sensitive personal data, so opening or taking them is an
    * event of the office, with author, document, moment and origin. */
+  /* The author and the role are the ones of the session, never a constant: a
+   * trail that names the wrong role is worse than no trail. */
+  const session = await currentSession();
   await recordDocumentAccess({
-    actor: (await officeProfile()).fullName,
-    role: "admin",
+    actor: session.lawyerName,
+    role: session.role,
     action: asDownload ? "download" : "preview",
     documentId: found.document.id,
     fileName: found.document.fileName,

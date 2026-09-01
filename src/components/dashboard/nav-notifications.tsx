@@ -3,14 +3,13 @@
 import { ArrowRight, BellRinging } from "@phosphor-icons/react";
 import Link from "next/link";
 import { Popover } from "radix-ui";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   navIconButtonClasses,
   navPanelClasses,
 } from "@/components/dashboard/nav-action-styles";
-import { captureSources, criticalDeadlines, riskAlerts } from "@/lib/persona";
 
-type NoticeGroup = {
+export type NoticeGroup = {
   id: string;
   heading: string;
   items: {
@@ -22,53 +21,8 @@ type NoticeGroup = {
   }[];
 };
 
-export function NavNotifications() {
+export function NavNotifications({ groups }: { groups: NoticeGroup[] }) {
   const [open, setOpen] = useState(false);
-
-  /*
-   * Every notice is a live reading of a record that already exists on a screen.
-   * Nothing is stored, nothing is marked as read, and the order goes from the
-   * failure that can hide a deadline to the deadline that is already counted.
-   */
-  const groups = useMemo<NoticeGroup[]>(() => {
-    const failingCaptures = captureSources.filter((source) => !source.healthy);
-
-    return [
-      {
-        id: "captures",
-        heading: "Captura externa",
-        items: failingCaptures.map((source) => ({
-          id: source.id,
-          title: `${source.label}, ${source.statusLabel.toLowerCase()}`,
-          detail: `${source.lastRunLabel}. ${source.roleLabel}`,
-          href: source.href,
-          destinationLabel: source.destinationLabel,
-        })),
-      },
-      {
-        id: "risks",
-        heading: "Alertas de risco",
-        items: riskAlerts.map((alert) => ({
-          id: alert.id,
-          title: `${alert.kindLabel}, ${alert.caseRef}`,
-          detail: `${alert.client}. ${alert.detailLabel}`,
-          href: alert.href,
-          destinationLabel: alert.destinationLabel,
-        })),
-      },
-      {
-        id: "deadlines",
-        heading: "Prazos críticos",
-        items: criticalDeadlines.map((deadline) => ({
-          id: deadline.id,
-          title: `${deadline.caseRef}, ${deadline.dueLabel}`,
-          detail: `${deadline.client}. ${deadline.benefit}. Estado ${deadline.status === "confirmed" ? "confirmado" : "calculado"}.`,
-          href: deadline.href,
-          destinationLabel: deadline.destinationLabel,
-        })),
-      },
-    ].filter((group) => group.items.length > 0);
-  }, []);
 
   const total = groups.reduce((sum, group) => sum + group.items.length, 0);
 
